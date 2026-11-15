@@ -92,6 +92,32 @@ class DeclarationRule(BaseModel):
     label: str
 
 
+class Tier(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    name: str
+    min: float = Field(ge=0)
+
+
+class IndexConfig(BaseModel):
+    """Standardised index: 100 = reference_days (a typical hub's total); tiers on the index."""
+    model_config = ConfigDict(extra="forbid")
+    reference_days: float = Field(gt=0)
+    tiers: list[Tier]
+
+    @model_validator(mode="after")
+    def check(self):
+        mins = [t.min for t in self.tiers]
+        if not mins or mins[0] != 0 or mins != sorted(mins) or len(set(mins)) != len(mins):
+            raise ValueError("index tiers must start at 0 and have strictly increasing lower bounds")
+        return self
+
+    def index(self, days: float) -> float:
+        return round(100 * days / self.reference_days, 1)
+
+    def tier(self, index: float) -> str:
+        return [t.name for t in self.tiers if index >= t.min][-1]
+
+
 class DisruptionConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
     recovery_severity: float = Field(gt=0, le=1)
@@ -102,6 +128,7 @@ class DisruptionConfig(BaseModel):
     declaration_rules: list[DeclarationRule]
     declaration_dedup_window_days: int = Field(ge=0)
     min_weather_coverage: float = Field(gt=0, le=1)
+    index: IndexConfig
 
     @model_validator(mode="after")
     def check(self):

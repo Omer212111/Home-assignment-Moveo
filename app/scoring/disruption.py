@@ -16,7 +16,7 @@ import numpy as np
 import pandas as pd
 from pydantic import BaseModel, Field
 
-from app.config import DisruptionConfig, WeatherRule
+from app.config import DisruptionConfig, WeatherRule, load_scoring
 
 
 # ---------------------------------------------------------------- output models
@@ -32,6 +32,8 @@ class HazardDisruption(BaseModel):
     hazard: str
     label: str
     days_per_year: float
+    index: float = 0.0       # 100 x days / reference days (a typical hub's total); see config index
+    tier: str = ""
     from_weather: float
     from_declarations: float
     events_per_year: float
@@ -67,6 +69,8 @@ class HubDisruption(BaseModel):
     state: str
     region: str
     total_days_per_year: float
+    index: float = 0.0       # standardised: 100 = a typical hub (config index.reference_days)
+    tier: str = ""           # low / moderate / elevated / high / very high
     hazards: dict[str, HazardDisruption]
     weather_complete: bool
     weather_coverage: float          # share of days in the window that have weather data
@@ -251,9 +255,14 @@ def hub_disruption(hub: dict, daily: pd.DataFrame, decl: pd.DataFrame, cfg: Disr
             events_per_year=round(h.get("events_per_year_wx", 0) + decl_events_per_year[hz], 3),
             drivers=drivers)
 
+    for h in hazards.values():  # standardised index and tier per hazard (same reference as the total)
+        h.index = cfg.index.index(h.days_per_year)
+        h.tier = cfg.index.tier(h.index)
+    total = round(sum(h.days_per_year for h in hazards.values()), 3)
+    total_index = cfg.index.index(total)
     return HubDisruption(
         hub_id=hub["hub_id"], city=hub["city"], state=hub["state"], region=hub["region"],
-        total_days_per_year=round(sum(h.days_per_year for h in hazards.values()), 3),
+        total_days_per_year=total, index=total_index, tier=cfg.index.tier(total_index),
         hazards=hazards, weather_complete=coverage >= cfg.min_weather_coverage,
         weather_coverage=coverage, weather_period=period,
         weather_days_deduplicated=dedup_count, declarations_counted=counted,
@@ -283,7 +292,9 @@ def rank(results: list[HubDisruption], hazard: str = "total", region: str | None
 
     sign = -1 if order == "most" else 1
     complete = sorted((r for r in pool if r.weather_complete), key=lambda r: (sign * value(r), r.hub_id))
+    idx = load_scoring().index
     ranking = [{"rank": i, "hub_id": r.hub_id, "city": r.city, "state": r.state, "region": r.region,
-                "days_per_year": value(r)} for i, r in enumerate(complete[:top_n], 1)]
+                "days_per_year": value(r), "index": idx.index(value(r)), "tier": idx.tier(idx.index(value(r)))}
+               for i, r in enumerate(complete[:top_n], 1)]
     return {"hazard": hazard, "region": region, "ranking": ranking,
             "excluded_incomplete_data": [r.hub_id for r in pool if not r.weather_complete]}

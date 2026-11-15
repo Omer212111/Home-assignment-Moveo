@@ -105,6 +105,8 @@ class RankedHub(BaseModel):
     hub_id: str
     city: str
     days_per_year: float
+    index: float = Field(description="standardised score: 100 = a typical hub")
+    tier: str = Field(description="low / moderate / elevated / high / very high")
     main_hazard: str = Field(description="hazard contributing the most disruption days")
 
 

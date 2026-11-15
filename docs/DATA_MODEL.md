@@ -94,8 +94,8 @@ flowchart LR
 | `RULE_SETS` | **rule_set_id**, sha256 (unique), rules_yaml, first_used_at |
 | `SCORING_RUNS` | **run_id**, rule_set_id, data_fingerprint, data_as_of, status (running / active / superseded), hubs, started_at, finished_at |
 | `DISRUPTION_DAYS` | **run_id**, **hub_id**, **date**, **hazard**, **event**, value, channel (weather / declarations), label (rule) |
-| `HAZARD_SCORES` | **run_id**, **hub_id**, **hazard**, label, days_per_year, from_weather, from_declarations, events_per_year, drivers_json |
-| `HUB_RESULTS` | **run_id**, **hub_id**, total_days_per_year, weather_complete, weather_coverage, weather_period, weather_years, declaration_years, weather_days_deduplicated, declarations_json |
+| `HAZARD_SCORES` | **run_id**, **hub_id**, **hazard**, label, days_per_year, index_value, tier, from_weather, from_declarations, events_per_year, drivers_json |
+| `HUB_RESULTS` | **run_id**, **hub_id**, total_days_per_year, index_value, tier, weather_complete, weather_coverage, weather_period, weather_years, declaration_years, weather_days_deduplicated, declarations_json |
 
 ## How scoring runs work
 - **At startup** the service checks whether the active run was computed from the current rules

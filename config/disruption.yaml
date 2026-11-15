@@ -64,3 +64,18 @@ declaration_rules:
 declaration_dedup_window_days: 5
 
 min_weather_coverage: 0.95   # share of days needed for a hub's weather channel to count as complete
+
+# STANDARDISED INDEX AND TIERS (presentation of the same KPI; the days stay the source of truth).
+# index = 100 x days / reference_days, for a hub's total and for each hazard. One reference for all
+# hazards, so hazard indices add up to the total index (a per-hazard median is 0 for heat and
+# tropical). The reference is FIXED here, not recomputed from the data, so a hub's index only moves
+# when its own days move; change it deliberately (it is part of the rule version and creates a
+# new scoring run). 4.85 = median total of the 50 hubs, 2021-2025 data, calibration v2.
+index:
+  reference_days: 4.85
+  tiers:            # lower bound of each tier on the index, ascending
+    - {name: low,       min: 0}
+    - {name: moderate,  min: 50}
+    - {name: elevated,  min: 100}
+    - {name: high,      min: 150}
+    - {name: very high, min: 200}

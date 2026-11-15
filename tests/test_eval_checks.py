@@ -20,7 +20,8 @@ def make_result(text, ranking_rows=None, args=None, notes="ok"):
     rows = tool_result["ranking"] if ranking_rows is None else ranking_rows
     answer = AgentAnswer(answer_markdown=text, assumptions=[], confidence="medium", uncertainty_notes=notes,
                          data_sources=[], ranking=[RankedHub(rank=r["rank"], hub_id=r["hub_id"], city=r["city"],
-                                                             days_per_year=r["days_per_year"], main_hazard=r["main_hazard"])
+                                                             days_per_year=r["days_per_year"], main_hazard=r["main_hazard"],
+                                                             index=r.get("index", 0.0), tier=r.get("tier", ""))
                                                    for r in rows])
     return AgentResult(answer=answer, model="m", steps=2, input_tokens=0, output_tokens=0,
                        tool_calls=[ToolCall(name="rank_hubs", input=args, is_error=False, duration_ms=0,

@@ -407,3 +407,34 @@ caches the same active run, so all replicas answer from the same scores.
 Why the scoring tables are not in the parquet snapshot: they are derived from the snapshot and the
 rules, so committing them would create a second source of truth; a fresh clone scores once on its
 first start (~1 s).
+
+---
+
+## 18. Standardised index and risk tiers (`config/disruption.yaml` -> `index`)
+
+**Decision: keep days per year as the KPI and add a standardised index and a tier next to it**
+(a presentation layer, not a replacement: days are a business unit, add up across hazards and can
+later be priced).
+
+- **Index = 100 x days / reference_days**, with **one reference for the total and for every hazard**:
+  4.85 days/yr, the median hub's total (2021-2025, calibration v2). Dallas 6.08 days -> 125 ("25%
+  above a typical hub"); Phoenix heat 4.5 days -> 93 ("heat alone costs 93% of a typical hub's year").
+  Per-hazard references were rejected: the median hub has 0 heat and 0 tropical days (division by
+  zero), and a mean reference makes rare hazards explode (Phoenix heat would be ~1,300).
+  With one reference, hazard indices add up to the total index, exactly like the days.
+- **Fixed reference, not recomputed from the data.** A percentile or a live median would move every
+  hub's score when other hubs' data change (or hubs are added), which would trigger false
+  risk-change alerts. The reference lives in the rules, so changing it is deliberate and creates a
+  new rule set and scoring run (section 17).
+- **Tiers on the index, fixed round bounds**: low < 50, moderate 50-99, elevated 100-149,
+  high 150-199, very high >= 200. On the current data: 7 / 18 / 13 / 8 / 4 hubs (very high:
+  Boston 270, Minneapolis 242, Denver 213, Milwaukee 212). Bounds are validated (start at 0, increasing).
+- **Rankings are unchanged**: the index is proportional to days, so the order is the same.
+- **Seasons and months**: an index for a period compares those days with a typical hub's whole
+  year (stated in the tool's `method`).
+- **Storage**: `hub_results` and `hazard_scores` gained `index_value` and `tier`. Scoring tables
+  are derived, so a schema version (`PRAGMA user_version`) drops and rebuilds them on upgrade;
+  source tables and chat history are untouched.
+- **Shown in**: every tool result, `/rankings`, `/hubs/{id}`, the ranking table (Index, Tier columns)
+  and the hub profile / comparison tables. The prompt asks the model to lead with days and may add
+  index and tier ("6.08 days/yr, index 125, elevated").

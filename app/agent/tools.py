@@ -28,6 +28,10 @@ METHOD = {
     # "last year" in a question means this year (the last full year in the data).
     "latest_full_year": int(settings.history_end[:4]),
     "seasons": SEASON_NOTE,
+    "index": ("standardised score: 100 = a typical hub (the median hub's total, fixed in the rules); "
+              "index = 100 x days / reference days, for the total and for each hazard (hazard indices add "
+              "up to the total); tiers: low < 50, moderate < 100, elevated < 150, high < 200, very high >= 200. "
+              "For a season or months, the index compares those days with a typical hub's WHOLE year"),
 }
 
 
@@ -63,6 +67,13 @@ def _leader(values: dict[str, float]) -> dict:
             "tied": top[0][1] == top[-1][1]}
 
 
+def _index(days: float) -> dict:
+    """Standardised index (100 = a typical hub's whole-year total) and tier, from the rule config."""
+    idx = load_scoring().index
+    i = idx.index(days)
+    return {"index": i, "tier": idx.tier(i)}
+
+
 def _period_info(months) -> dict:
     return {"period": describe(months), **({"seasons_definition": SEASON_NOTE} if months else {})}
 
@@ -81,6 +92,8 @@ def _hazard_detail(r, hazard: str, ranks: dict[str, int], n_drivers: int) -> dic
     return {
         "label": h.label,
         "days_per_year": h.days_per_year,
+        "index": h.index,
+        "tier": h.tier,
         "rank_among_hubs": ranks.get(r.hub_id),
         "share_of_hub_total_pct": round(100 * h.days_per_year / r.total_days_per_year) if r.total_days_per_year else 0,
         "from_weather": h.from_weather,
@@ -104,6 +117,8 @@ def explain_hub(args: ExplainHubInput) -> dict:
     return {
         "hub": {k: getattr(r, k) for k in ("hub_id", "city", "state", "region")},
         "total_days_per_year": r.total_days_per_year,
+        "index": r.index,
+        "tier": r.tier,
         # Context pre-computed so the model can say whether "high" is true without doing arithmetic.
         "context": {
             "overall_rank": overall,
@@ -138,7 +153,7 @@ def compare_hubs(args: CompareHubsInput) -> dict:
             return _hazard_detail(r, h, ranks[h], 2)
         v = views[r.hub_id].get(h, {"days_per_year": 0.0, "events_in_data": 0, "from_weather": 0.0,
                                      "from_fema_declarations": 0.0, "top_drivers": []})
-        return {"label": r.hazards[h].label, **v, "rank_among_hubs": ranks[h].get(r.hub_id),
+        return {"label": r.hazards[h].label, **v, **_index(v["days_per_year"]), "rank_among_hubs": ranks[h].get(r.hub_id),
                 "fema_disasters_counted": [{"title": d.title, "incident_start": d.incident_begin_date,
                                             "days_counted": d.days} for d in r.declarations_counted
                                            if d.hazard == h and int((d.incident_begin_date or d.declaration_date)[5:7]) in months],
@@ -148,6 +163,7 @@ def compare_hubs(args: CompareHubsInput) -> dict:
     rows = [{
         "hub": {k: getattr(r, k) for k in ("hub_id", "city", "state", "region")},
         "total_days_per_year": round(total[r.hub_id], 3),
+        **_index(total[r.hub_id]),
         "overall_rank": ranks["total"].get(r.hub_id),
         "hazards": {h: detail(r, h) for h in hazards},
         "caveats": _caveats(r),
@@ -175,7 +191,7 @@ def rank_hubs(args: RankHubsInput) -> dict:
                                 key=lambda kv: -kv[1]))
         main = next(iter(by_hazard), None) if args.hazard == "total" else args.hazard
         rows.append({
-            **{k: row[k] for k in ("rank", "hub_id", "city", "state", "region", "days_per_year")},
+            **{k: row[k] for k in ("rank", "hub_id", "city", "state", "region", "days_per_year", "index", "tier")},
             "main_hazard": labels[main] if main else None,
             "by_hazard": by_hazard,
             "top_drivers": view[main]["top_drivers"] if main in view else [],

@@ -32,6 +32,8 @@ two rounds of tool calls; use a second round only when a call needs a result fro
 and the system attaches rank_hubs' ranking to your answer as a table by itself.
 - In answer_markdown, show at most the top 10 rows of the ranking (fewer if fewer were asked \
 for), in the tool's order, and say the full list is in the ranking table.
+- Lead with expected disruption days per year (the KPI). You may add the tool's index (100 = a \
+typical hub) and tier to make a number easy to compare ("6.08 days/yr, index 125, elevated").
 - Explain the result briefly: what drives the top hubs, in plain language, using the drivers \
 from the tool.
 - Pass on caveats from the tool result (for example overstated coastal wind) and hubs that \

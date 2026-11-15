@@ -179,6 +179,12 @@ Two channels, combined per hazard:
 | **Weather** | Open-Meteo daily reanalysis, 2021-2025 (5 years) | Frequent events: snow, ice, extreme cold, heavy rain, high wind, extreme heat. Rules in `config/disruption.yaml` (e.g. snow >= 7 cm = hub closed + 1 recovery day; gusts >= 75 km/h = docks limited, 0.5 day). Consecutive days form one event; the worst rule per day counts once. |
 | **Declarations** | OpenFEMA major-disaster (DR) declarations, 2006-2026 (20 years) | Rare events that 5 years of weather cannot capture: hurricanes / tropical storms (7 days each) and severe storms / tornadoes (1.5 days each). Weather days already covered by a declaration are not counted twice. |
 
+**Standardised index and tiers** (next to the days, not instead of them): index = 100 x days /
+4.85, the median hub's total, fixed in `config/disruption.yaml`, so 100 = a typical hub (Dallas
+6.08 days -> 125). The same reference is used for each hazard, so hazard indices add up to the
+total. Tiers: low < 50, moderate < 100, elevated < 150, high < 200, very high >= 200 (on the
+current data 7 / 18 / 13 / 8 / 4 hubs).
+
 Six hazards: winter (snow, ice, cold), flood (extreme rain), high wind, heat, tropical
 (hurricanes), severe storms. All thresholds are **expert judgment**, calibrated once against the
 real data (`docs/DATA_NOTES.md`), and live in YAML so analysts change numbers, not code.
@@ -187,8 +193,8 @@ real data (`docs/DATA_NOTES.md`), and live in YAML so analysts change numbers, n
 so the same data answers "by month", "by season" (meteorological: winter = Dec-Feb) and "by year".
 Months and seasons always add up to the annual total (tested for all 50 hubs and every hazard).
 
-Current top of the ranking: Boston 13.1, Minneapolis 11.7, Denver 10.3, Milwaukee 10.3,
-Chicago 9.6 days/yr (winter-driven). Safest: San Diego 0.2.
+Current top of the ranking: Boston 13.1 (index 270), Minneapolis 11.7 (242), Denver 10.3 (213),
+Milwaukee 10.3 (212), all "very high", winter-driven. Safest: San Diego 0.2 (index 4, low).
 
 **Scores are stored per scoring run** in SQLite (`docs/DATA_MODEL.md`). At startup the server
 reuses the active run if the rules and data are unchanged, otherwise it scores and stores a new
@@ -270,7 +276,7 @@ Two layers:
 
 | Layer | Checks | Command | Cost |
 |---|---|---|---|
-| Unit tests (`tests/`, 62 tests) | Scoring rules, time breakdowns, stored scoring runs, ingestion, API, agent loop with a scripted fake Claude, the eval checks themselves, Redis cache | `uv run pytest -q` | free, offline |
+| Unit tests (`tests/`, 67 tests) | Scoring rules, time breakdowns, stored scoring runs, ingestion, API, agent loop with a scripted fake Claude, the eval checks themselves, Redis cache | `uv run pytest -q` | free, offline |
 | Agent evals (`evals/`, 15 cases / 17 turns) | The real model on edge cases: the 4 assignment questions, a city that is not a hub, "top 100" when only 50 exist, follow-ups, "winter" hazard vs season, safest hubs, worst month, per-year comparison, hurricane season | `uv run python -m evals.run` | ~$0.55 |
 
 Checks on every turn: valid answer format, the right tool with the right arguments, ranking equal
@@ -428,7 +434,7 @@ Every answer from the agent carries `assumptions`, `confidence` and `uncertainty
 ## 12. Status and next steps
 
 Built: data ingestion, scoring engine, time breakdowns, 5-tool agent with guardrails, API, chat
-page with agent-step view, trajectories, Redis cache, scores stored per scoring run, 62 tests, 15-case eval set (run 7: 110/111).
+page with agent-step view, trajectories, Redis cache, scores stored per scoring run, standardised index and tiers, 67 tests, 15-case eval set (run 7: 110/111).
 
 Next (in order): refresh `docs/ARCHITECTURE.md`; deploy (Docker on Render); bonus: voice input
 (browser Web Speech API) and an alert when a hub's score changes. Longer-term improvements (cost in

@@ -51,6 +51,8 @@ CREATE TABLE IF NOT EXISTS hub_results (
     run_id INTEGER NOT NULL REFERENCES scoring_runs(run_id),
     hub_id TEXT NOT NULL,
     total_days_per_year REAL NOT NULL,    -- the KPI
+    index_value REAL NOT NULL,            -- 100 = a typical hub (config index.reference_days)
+    tier TEXT NOT NULL,
     weather_complete INTEGER NOT NULL,
     weather_coverage REAL,
     weather_period TEXT,
@@ -66,6 +68,8 @@ CREATE TABLE IF NOT EXISTS hazard_scores (
     hazard TEXT NOT NULL,
     label TEXT,
     days_per_year REAL NOT NULL,
+    index_value REAL NOT NULL,
+    tier TEXT NOT NULL,
     from_weather REAL,
     from_declarations REAL,
     events_per_year REAL,
@@ -100,12 +104,26 @@ CREATE TABLE IF NOT EXISTS ingest_runs (
 SNAPSHOT_TABLES = ["hubs", "daily_weather", "disaster_declarations", "ingest_runs"]
 
 
+# Bump when the derived scoring tables change shape. They hold no source data (they are rebuilt from
+# the snapshot and the rules), so an older version is simply dropped and recreated.
+SCORING_SCHEMA_VERSION = 2
+SCORING_TABLES = ["disruption_days", "hazard_scores", "hub_results", "scoring_runs", "rule_sets"]
+
+
+def _migrate(conn) -> None:
+    if conn.execute("PRAGMA user_version").fetchone()[0] < SCORING_SCHEMA_VERSION:
+        for t in SCORING_TABLES:
+            conn.execute(f"DROP TABLE IF EXISTS {t}")
+        conn.execute(f"PRAGMA user_version = {SCORING_SCHEMA_VERSION}")
+
+
 @contextmanager
 def connect():
     settings.db_path.parent.mkdir(parents=True, exist_ok=True)
     conn = sqlite3.connect(settings.db_path)
     conn.row_factory = sqlite3.Row
     try:
+        _migrate(conn)
         conn.executescript(SCHEMA)
         yield conn
         conn.commit()

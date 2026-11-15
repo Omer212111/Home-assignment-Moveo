@@ -72,10 +72,16 @@
   .rank th { text-align: left; color: var(--muted); font-weight: 500; font-size: 12px; padding: 4px 6px; border-bottom: 1px solid var(--border); }
   .rank td { padding: 6px; border-bottom: 1px solid var(--border); vertical-align: middle; }
   .rank td.num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
-  .barcell { width: 32%; }
+  .barcell { width: 16%; }
   .bar { height: 8px; border-radius: 4px; background: var(--bar); }
   .badge { display: inline-block; padding: 2px 10px; border-radius: 999px; font-size: 13px; font-weight: 600;
            border: 1px solid currentColor; }
+  .tier { font-size: 11px; padding: 1px 6px; border-radius: 8px; border: 1px solid var(--border); white-space: nowrap; }
+  .t-very-high { color: var(--low); border-color: var(--low); font-weight: 600; }
+  .t-high { color: var(--low); border-color: var(--low); }
+  .t-elevated { color: var(--medium); border-color: var(--medium); }
+  .t-moderate { color: var(--muted); }
+  .t-low { color: var(--high); border-color: var(--high); }
   .badge.low { color: var(--low); } .badge.medium { color: var(--medium); } .badge.high { color: var(--high); }
   #details ul { margin: 0; padding-left: 18px; }
   #details li { margin-bottom: 4px; overflow-wrap: anywhere; }
@@ -186,10 +192,12 @@ function renderDetails(res) {
     const per = rc && rc.result.period && rc.result.period !== "whole year" ? ` (${esc(rc.result.period)})` : "";
     html += `<h3>Ranking - expected disruption days / year${per}</h3>`
          + "<table class='rank'><thead><tr>"
-         + "<th>#</th><th>Hub</th><th class='num'>Days/yr</th><th class='barcell'></th><th>Main hazard</th></tr></thead><tbody>"
+         + "<th>#</th><th>Hub</th><th class='num'>Days/yr</th><th class='barcell'></th>"
+         + "<th class='num' title='100 = a typical hub'>Index</th><th>Tier</th><th>Main hazard</th></tr></thead><tbody>"
          + a.ranking.map(r => `<tr><td>${r.rank}</td><td>${esc(r.city)}</td>`
            + `<td class="num">${r.days_per_year.toFixed(2)}</td>`
            + `<td class="barcell"><div class="bar" style="width:${(100 * r.days_per_year / max).toFixed(1)}%"></div></td>`
+           + `<td class="num">${Math.round(r.index)}</td><td><span class="tier t-${esc(r.tier).replace(" ", "-")}">${esc(r.tier)}</span></td>`
            + `<td>${esc(r.main_hazard)}</td></tr>`).join("")
          + "</tbody></table>";
   }
@@ -199,6 +207,7 @@ function renderDetails(res) {
     let hubs = null;
     if (c.name === "compare_hubs") hubs = c.result.hubs;
     if (c.name === "explain_hub") hubs = [{hub: c.result.hub, total_days_per_year: c.result.total_days_per_year,
+                                           index: c.result.index, tier: c.result.tier,
                                            overall_rank: c.result.context.overall_rank,
                                            hazards: c.result.hazards_by_contribution}];
     if (!hubs || !hubs.length) continue;
@@ -213,7 +222,10 @@ function renderDetails(res) {
              return `<td class="num">${v.days_per_year.toFixed(2)} <span class="meta">#${v.rank_among_hubs ?? "-"}</span></td>`;
            }).join("") + "</tr>").join("")
          + "<tr><td><b>All hazards</b></td>" + hubs.map(h => `<td class="num"><b>${h.total_days_per_year.toFixed(2)}</b>`
-           + ` <span class="meta">#${h.overall_rank ?? "-"}</span></td>`).join("") + "</tr></tbody></table>";
+           + ` <span class="meta">#${h.overall_rank ?? "-"}</span></td>`).join("") + "</tr>"
+         + "<tr><td>Index (100 = typical hub)</td>" + hubs.map(h => `<td class="num">${h.index != null ? Math.round(h.index) : "-"}`
+           + `${h.tier ? ` <span class="tier t-${esc(h.tier).replace(" ", "-")}">${esc(h.tier)}</span>` : ""}</td>`).join("")
+         + "</tr></tbody></table>";
   }
   // hub_breakdown: periods x hubs; weather_stat: one row per hub. Built from the tool result, never the text.
   for (const c of calls0) {

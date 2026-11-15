@@ -76,13 +76,13 @@ def save_run(results: list[HubDisruption], rules_sha: str, rules_yaml: str, fing
             "INSERT INTO scoring_runs (rule_set_id, data_fingerprint, data_as_of, status, hubs, started_at) "
             "VALUES (?,?,?,?,?,?)", (rule_set_id, fingerprint, data_as_of, "running", len(results), _now())).lastrowid
         conn.executemany(
-            "INSERT INTO hub_results VALUES (?,?,?,?,?,?,?,?,?,?)",
-            [(run_id, r.hub_id, r.total_days_per_year, int(r.weather_complete), r.weather_coverage, r.weather_period,
+            "INSERT INTO hub_results VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
+            [(run_id, r.hub_id, r.total_days_per_year, r.index, r.tier, int(r.weather_complete), r.weather_coverage, r.weather_period,
               r.weather_years, r.declaration_years, r.weather_days_deduplicated,
               json.dumps([c.model_dump() for c in r.declarations_counted])) for r in results])
         conn.executemany(
-            "INSERT INTO hazard_scores VALUES (?,?,?,?,?,?,?,?,?)",
-            [(run_id, r.hub_id, h.hazard, h.label, h.days_per_year, h.from_weather, h.from_declarations,
+            "INSERT INTO hazard_scores VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+            [(run_id, r.hub_id, h.hazard, h.label, h.days_per_year, h.index, h.tier, h.from_weather, h.from_declarations,
               h.events_per_year, json.dumps([d.model_dump() for d in h.drivers]))
              for r in results for h in r.hazards.values()])
         conn.executemany(
@@ -104,6 +104,7 @@ def load_run(run_id: int) -> list[HubDisruption]:
         for r in conn.execute("SELECT * FROM hazard_scores WHERE run_id = ?", (run_id,)):
             hazards.setdefault(r["hub_id"], {})[r["hazard"]] = HazardDisruption(
                 hazard=r["hazard"], label=r["label"], days_per_year=r["days_per_year"],
+                index=r["index_value"], tier=r["tier"],
                 from_weather=r["from_weather"], from_declarations=r["from_declarations"],
                 events_per_year=r["events_per_year"],
                 drivers=[Driver(**d) for d in json.loads(r["drivers_json"])])
@@ -119,7 +120,8 @@ def load_run(run_id: int) -> list[HubDisruption]:
             continue
         out.append(HubDisruption(
             hub_id=hub_id, city=hub["city"], state=hub["state"], region=hub["region"],
-            total_days_per_year=res["total_days_per_year"], hazards=hazards.get(hub_id, {}),
+            total_days_per_year=res["total_days_per_year"], index=res["index_value"], tier=res["tier"],
+            hazards=hazards.get(hub_id, {}),
             weather_complete=bool(res["weather_complete"]), weather_coverage=res["weather_coverage"],
             weather_period=res["weather_period"], weather_days_deduplicated=res["weather_days_deduplicated"],
             declarations_counted=[CountedDeclaration(**c) for c in json.loads(res["declarations_json"])],
