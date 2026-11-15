@@ -344,3 +344,31 @@ server attaches the one with the largest `top_n` (run 3: 50 then 10 showed 10 hu
 
 **"Last year":** the `year` field's description now names the year (2025), so the model does not
 have to look up `latest_full_year` first (run 6: it first called with no year).
+
+---
+
+## 16. Raw API cache in Redis (`app/sources/http_cache.py`)
+
+**Decision (user's choice): Redis as the raw HTTP cache backend, files kept as the fallback.**
+When `REDIS_URL` is set, every public-API response is stored in Redis under
+`httpcache:<source>:<hash>` (the same hash as the file name, API key excluded), as a JSON envelope
+`{url, params, fetched_at, data}`. When it is not set, the cache uses `data/raw/` files as before.
+
+Why this shape:
+- **Same keys in both backends**, so `uv run python -m app.sources.http_cache import-files` moves the
+  97 committed responses into Redis and ingestion makes no API calls (verified against a real Redis:
+  97 imported, full ingest with the HTTP client disabled, identical snapshot tables).
+- **No expiry** (`TTL -1`): historical weather and declarations do not change. Redis must run with
+  persistence (`--appendonly yes`), otherwise a restart empties the cache and the next ingest
+  spends the Open-Meteo quota again.
+- **The envelope adds what files did not have**: the request URL, parameters and fetch time, so the
+  audit question "where did this number come from?" is answered from Redis itself.
+- **A configured but unreachable Redis is an error**, not a silent fall-back to files: a fall-back
+  would hide the misconfiguration and quietly call the APIs.
+- **Files stay the default** so the repository works on a fresh clone and in tests with no server
+  (tests use `fakeredis`).
+
+What Redis adds over files: one cache shared by every machine or ingestion worker pointing at it,
+and a natural home for the planned live data (NWS alerts with a short TTL). What it costs: a server
+to run (Docker locally; a managed Redis when deployed) and the cache is no longer visible in git.
+The running API does not use this cache at all; it starts from the parquet snapshot.

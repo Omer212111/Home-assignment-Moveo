@@ -24,6 +24,8 @@ class Settings(BaseSettings):
     db_path: Path = ROOT / "data" / "weather_risk.db"
     snapshot_dir: Path = ROOT / "data" / "snapshot"
     raw_cache_dir: Path = ROOT / "data" / "raw"
+    # Raw API response cache in Redis instead of data/raw/ files, e.g. redis://localhost:6379/0
+    redis_url: str | None = None
     trajectory_dir: Path = ROOT / "data" / "trajectories"  # one JSON per chat question (git-ignored)
 
     # Config files

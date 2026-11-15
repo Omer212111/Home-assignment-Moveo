@@ -57,7 +57,7 @@ def ingest_weather(conn, hubs, start: str, end: str, refresh: bool) -> list[str]
             df, path, from_cache = open_meteo.fetch_daily(hub, start, end, refresh=refresh)
             _upsert(conn, "daily_weather", df)
             _log_run(conn, "open_meteo", params, started, len(df), "ok",
-                     f"{'cache' if from_cache else 'api'}: {path.relative_to(settings.raw_cache_dir.parent)}")
+                     f"{'cache' if from_cache else 'api'}: {path}")
             print(f"[weather {i}/{len(hubs)}] {hub.id}: {len(df)} days ({'cache' if from_cache else 'api'})")
         except (SourceError, ValueError, OSError) as exc:
             _log_run(conn, "open_meteo", params, started, 0, "error", str(exc))
@@ -81,7 +81,7 @@ def ingest_declarations(conn, hubs, since: str, refresh: bool) -> list[str]:
             conn.execute("DELETE FROM disaster_declarations WHERE county_fips = ?", (fips,))
             _upsert(conn, "disaster_declarations", df)
             _log_run(conn, "fema_declarations", params, started, len(df), "ok",
-                     f"{'cache' if from_cache else 'api'}: {path.relative_to(settings.raw_cache_dir.parent)}")
+                     f"{'cache' if from_cache else 'api'}: {path}")
             print(f"[declarations {i}/{len(counties)}] {fips}: {len(df)} disasters")
         except (SourceError, ValueError, OSError) as exc:
             _log_run(conn, "fema_declarations", params, started, 0, "error", str(exc))
