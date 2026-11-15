@@ -124,3 +124,28 @@ Findings:
    10.1 s call returned no thinking block at all (at effort `low` the model did not think on this
    simple question), so there was no summary to generate. More likely API latency variance; to be
    measured with repeated single-case runs under each setting before changing anything.
+
+## Run 6 (time dimension, 15 cases / 17 turns): 110/111 checks, ~$1.12
+
+All the new time questions chose the right tool and arguments: "in summer" -> season, "winter
+storms" -> hazard, "safest" -> order least, Denver's worst month = March, seasons comparison, years
+2024 vs 2021, snowfall in 2025 = 11.8%, hurricane season = months 6-11.
+
+But the cost and the number of model calls went up sharply:
+
+| | Run 5 | Run 6 |
+|---|---|---|
+| Repeated identical calls (served from cache) | 1 | **15** (in 14 of 17 turns) |
+| Typical simple question | 2 model calls, ~8-9k input tokens | 3 model calls, ~21-24k input tokens |
+| Total | 93k input tokens, $0.26 for 9 turns | 473k input tokens, $1.12 for 17 turns |
+
+Findings:
+1. **The repeat is now systematic**: after the first tool result the model calls the same tool again
+   in almost every case; the guardrail then forces the answer on call 3. Correct answers, but each
+   question pays a full extra round trip (~12k input tokens). The repeats grew with the size of the
+   tool list and prompt (run 4: 3 tools, loops; run 6: 5 tools, repeats everywhere).
+2. **Wandering:** `hurricane_season_comparison` made 4 rounds (compare, explain Miami, rank top 1,
+   repeat). The side call to `rank_hubs(top_n=1)` made the server attach a 1-row ranking to a
+   comparison answer: the only failed check.
+3. `snowfall_percentage` first called `year: null`, then corrected itself to 2025 ("last year").
+4. `impossible_n` repeated the run-3 pattern (50, then 10, then 50 again).
