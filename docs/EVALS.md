@@ -149,3 +149,23 @@ Findings:
    comparison answer: the only failed check.
 3. `snowfall_percentage` first called `year: null`, then corrected itself to 2025 ("last year").
 4. `impossible_n` repeated the run-3 pattern (50, then 10, then 50 again).
+
+## Run 7 (two tool rounds + prompt caching): 110/111 checks, ~$0.55
+
+| | Run 6 | Run 7 |
+|---|---|---|
+| Cost (17 turns) | $1.12 | **$0.55** |
+| Input tokens / of which from cache | 473k / 0 | 388k / **243k (63%)** |
+| Turns with 3+ model calls | 15 | 14 (none above 3) |
+| Wandering beyond two rounds | yes (hurricane: 5 calls) | no |
+
+Findings:
+1. **Caching works**: about two thirds of input tokens are served from the cache; cost halved.
+2. **The limit holds**: no turn exceeded 3 model calls; `hurricane_season_comparison` now passes.
+3. **The model still uses its second round in most turns**: 10 identical repeats, and 4 "extra"
+   calls that add little (explain the top hub after a ranking, a one-hub season breakdown after a
+   two-hub one). As predicted when choosing two rounds: a repeat costs at most one round trip.
+4. **The failed check is a check problem, not a wrong answer**: `compare_by_season` first called
+   `hub_breakdown(boston, minneapolis)` (correct), then an extra `hub_breakdown(boston)`; the args
+   check looks only at the last call of the tool.
+5. `snowfall_percentage` used `year: 2025` on the first call (run 6: corrected only on the second).
