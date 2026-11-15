@@ -1,0 +1,23 @@
+# Offline tests on every push and pull request: scoring engine, time breakdowns, scoring runs,
+# alerts and concurrency, API, agent loop with a scripted fake Claude, eval checks and runner.
+# No API key and no network calls are needed. The paid agent evals (evals/run.py) are run by hand.
+name: tests
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  pytest:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: "3.13"
+          enable-cache: true
+      - name: Install dependencies (from uv.lock)
+        run: uv sync --frozen
+      - name: Run tests
+        run: uv run pytest -q

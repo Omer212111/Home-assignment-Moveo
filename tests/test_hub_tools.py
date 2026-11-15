@@ -70,4 +70,4 @@ def test_eval_cases_file_parses():
     import yaml
     from evals.run import check_turn  # noqa: F401  (the runner imports cleanly)
     cases = yaml.safe_load((Path(__file__).parent.parent / "evals" / "cases.yaml").read_text(encoding="utf-8"))["cases"]
-    assert len(cases) == 15 and all(c["turns"] and "why" in c for c in cases)
+    assert len(cases) == 24 and all(c["turns"] and "why" in c for c in cases)
