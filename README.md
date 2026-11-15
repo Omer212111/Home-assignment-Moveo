@@ -17,6 +17,57 @@ In which month is Denver most disrupted? Compare Boston and Minneapolis by seaso
 The LLM never produces a number: it chooses tools and writes the explanation. Every number comes
 from the engine, and the evals check that.
 
+## Architecture at a glance
+
+```mermaid
+---
+config:
+  flowchart:
+    curve: basis
+    nodeSpacing: 30
+    rankSpacing: 50
+---
+flowchart LR
+    UI["<b>Chat page</b><br/>static HTML/JS<br/>answer · details · agent steps"]
+
+    subgraph SVC["FastAPI service (one process)"]
+        direction TB
+        CHAT["<b>POST /chat</b>"]
+        AGENT["<b>Agent loop</b><br/>tool use + JSON schemas<br/>guardrails"]
+        TOOLS["<b>5 tools</b><br/>rank · explain · compare<br/>breakdown · weather_stat"]
+        ENG["<b>Scoring service</b><br/>active scoring run<br/>cached in memory"]
+        REST["<b>GET /rankings · /hubs</b><br/>no LLM"]
+        CHAT --> AGENT --> TOOLS --> ENG
+        REST --> ENG
+    end
+
+    CLAUDE["<b>Anthropic API</b><br/>Claude Sonnet 5.5"]
+    DB[("<b>SQLite</b><br/>source tables · scoring runs<br/>conversations")]
+    BATCH["<b>Offline ingestion</b><br/>Open-Meteo · OpenFEMA<br/>→ raw cache (Redis / files)<br/>→ parquet snapshot (git)"]
+
+    UI -- "HTTP JSON" --> CHAT
+    UI -.-> REST
+    AGENT <-- "Messages API" --> CLAUDE
+    ENG <--> DB
+    CHAT <-- "history" --> DB
+    BATCH -- "restore at startup" --> DB
+
+    classDef client fill:#f3eefa,stroke:#7d5bb5,color:#271a3b
+    classDef api fill:#e8f1fb,stroke:#3b78c3,color:#13263d
+    classDef agent fill:#fff4e5,stroke:#d9822b,color:#3d2a12
+    classDef llm fill:#fdecec,stroke:#c0504d,color:#3b1414
+    classDef eng fill:#eaf6ec,stroke:#3c9a52,color:#14301b
+    classDef group fill:#fafafa,stroke:#c8c8c8,color:#444
+    class UI client
+    class CHAT,REST api
+    class AGENT,TOOLS agent
+    class CLAUDE llm
+    class ENG,DB,BATCH eng
+    class SVC group
+```
+
+How one chat question flows through the agent: [section 8](#8-architecture).
+
 ---
 
 ## Contents
@@ -282,32 +333,75 @@ uv run python -m app.sources.http_cache status
 
 ## 8. Architecture
 
+### Components
+
+The component diagram is at the top of this page ([Architecture at a glance](#architecture-at-a-glance)).
+
+- **One process** serves the chat page, the API and the agent. The page is a plain client of
+  `POST /chat`; the deterministic endpoints (`/rankings`, `/hubs`) answer without the LLM.
+- **Batch ingestion is separate from serving.** The service never calls a weather API to answer a
+  question: SQLite is restored from the committed snapshot at startup, and the scores come from the
+  active scoring run. The demo works when a public API is down, answers are fast, evals repeatable.
+
+### The agent loop: one chat question
+
+```mermaid
+---
+config:
+  flowchart:
+    curve: basis
+    nodeSpacing: 35
+    rankSpacing: 35
+    wrappingWidth: 420
+---
+flowchart TB
+    IN["<b>POST /chat</b> · question + session_id<br/>load the last 6 question/answer pairs (SQLite)"]
+    REQ["<b>1 · Build the request</b><br/>system prompt · history · question<br/>5 strict tool schemas + ModelAnswer schema (both from Pydantic)<br/>prompt cache · effort low · thinking summary"]
+    CALL["<b>2 · Call Claude Sonnet 5.5</b> · Messages API<br/>structured output · server-side refusal fallbacks"]
+    STOP{"stop_reason"}
+    RUN["<b>3 · Run the requested tools</b> (in parallel)<br/>validate arguments → invalid: error back to the model<br/>identical call in this question → served from cache"]
+    TOOLS["<b>Deterministic engine</b><br/>rank_hubs · explain_hub · compare_hubs · hub_breakdown · weather_stat<br/>results: numbers, pre-computed differences, caveats, method, scoring run"]
+    GUARD{"limit<br/>reached?"}
+    FORCE["<b>4 · Guardrail</b><br/>after 2 successful tool rounds, a round of only repeated calls,<br/>or on the 6th model call → next call with <b>tool_choice: none</b><br/>(tools stay defined, prompt cache intact)"]
+    VAL{"valid<br/>JSON?"}
+    RETRY["ask again with the<br/>validation error (once)"]
+    ATT["<b>5 · Attach engine data</b><br/>answer + assumptions + confidence + uncertainty + sources (from the model)<br/>+ ranking from rank_hubs, tool calls, tokens, trajectory (from the code)"]
+    OUT["<b>6 · Save and return</b><br/>turn → SQLite · trajectory → JSON file · AgentAnswer → the page"]
+    ERR["<b>502</b> with a readable message<br/>refusal · max_tokens · API error"]
+
+    IN --> REQ --> CALL --> STOP
+    STOP -- "tool_use" --> RUN --> TOOLS --> GUARD
+    GUARD -- "no" --> CALL
+    GUARD -- "yes" --> FORCE --> CALL
+    STOP -- "end_turn" --> VAL
+    VAL -- "no" --> RETRY --> CALL
+    VAL -- "yes" --> ATT --> OUT
+    STOP -- "refusal /<br/>max_tokens" --> ERR
+
+    classDef step fill:#fff4e5,stroke:#d9822b,color:#3d2a12
+    classDef llm fill:#fdecec,stroke:#c0504d,color:#3b1414
+    classDef tool fill:#eaf6ec,stroke:#3c9a52,color:#14301b
+    classDef io fill:#e8f1fb,stroke:#3b78c3,color:#13263d
+    classDef dec fill:#ffffff,stroke:#888,color:#333
+    class REQ,RUN,FORCE,RETRY,ATT step
+    class CALL,ERR llm
+    class TOOLS tool
+    class IN,OUT io
+    class STOP,GUARD,VAL dec
 ```
- Public APIs                 Ingestion (offline CLI)                FastAPI service (one process)
- ───────────                 ───────────────────────                ─────────────────────────────
- Open-Meteo  ──┐                                                    startup: snapshot -> SQLite
-               ├──> app/ingest.py ──> raw cache ──> parquet         -> scoring engine (in memory)
- OpenFEMA    ──┘    (validate)        (Redis or     snapshot  ───>
-                                       data/raw/)   (git)           GET /rankings, /hubs  (no LLM)
 
-                                                                    POST /chat
- Browser (chat page) ── HTTP JSON ──> /chat ──> agent loop ──> 5 tools ──> scoring engine
-                                                   │  ▲
-                                                   ▼  │ strict tool schemas + ModelAnswer schema
-                                              Anthropic API (Claude Sonnet 5.5)
-```
+| Step | What happens | Code |
+|---|---|---|
+| 1 · Build the request | System prompt, the last 6 Q&A pairs, the question, 5 **strict** tool schemas and the `ModelAnswer` output schema, all generated from Pydantic. Prompt caching on. | `loop.py`, `schemas.py`, `prompts.py` |
+| 2 · Call Claude | Sonnet 5.5, effort low, thinking summary for the "Agent steps" view; refusals retried on a fallback model by the API. | `loop.py::_call_model` |
+| 3 · Run the tools | Arguments validated again with Pydantic (a city that is not a hub, season *and* months: error back to the model, which may correct it). Identical repeats served from a cache. | `tools.py::run_tool` |
+| Engine | Tools read the active scoring run and return numbers with pre-computed differences and counts, caveats, the method and the scoring run id. The model never does arithmetic. | `tools.py`, `scoring/` |
+| 4 · Guardrails | At most 2 successful tool rounds; a round of only repeated calls, or the 6th model call, forces the answer with `tool_choice: none`. | `loop.py::_run` |
+| 5 · Validate and attach | The answer must match `ModelAnswer` (one retry). The server then attaches the ranking from the engine, not from the model's text. | `loop.py`, `schemas.py::AgentAnswer` |
+| 6 · Save and return | The turn goes to SQLite (conversation memory), the step-by-step trajectory to a JSON file, the `AgentAnswer` to the page. | `main.py`, `trajectory.py` |
 
-Main design choice: **batch ingestion is separate from serving.** The service never calls a
-weather API to answer a question; it starts from the committed snapshot. The demo therefore works
-when a public API is down or rate-limited, answers are fast, and evals are repeatable.
-
-One chat question: the page posts to `/chat` -> the server loads the conversation history from
-SQLite -> the agent sends the question, history and 5 strict tool schemas to Claude -> Claude asks
-for tools -> the loop validates the arguments and runs the tools against the engine -> results go
-back -> Claude returns a `ModelAnswer` JSON -> validated -> the server attaches the engine's
-ranking -> saved to history and as a trajectory -> returned to the page.
-
-Diagrams and component table: `docs/ARCHITECTURE.md`.
+More diagrams: `docs/ARCHITECTURE.md`, `docs/DATA_MODEL.md`. PNG/SVG exports in `docs/img/`
+(`architecture-agent-1`, `architecture-agent-2`).
 
 ---
 
