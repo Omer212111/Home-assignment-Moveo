@@ -1,118 +1,96 @@
 # Data model: tables and how they connect
 
-All data the system stores, across its storage layers (see README section 9):
-the raw API cache (Redis or `data/raw/` files), the SQLite tables (restored from the committed
-parquet snapshot at startup), and the objects the scoring engine keeps in memory.
-PNG/SVG exports: `docs/img/data-model.png`, `docs/img/data-model.svg`.
+The data flows left to right: inputs (the hub list and the raw API cache), the SQLite tables
+(restored from the committed parquet snapshot at startup), and the objects the scoring engine
+keeps in memory. PNG/SVG exports: `docs/img/data-model.png`, `docs/img/data-model.svg`.
 
 ```mermaid
-erDiagram
-    HTTPCACHE {
-        string key PK "httpcache:source:hash (Redis) or data/raw/source/hash.json"
-        string url "request URL, API key excluded"
-        json params
-        string fetched_at
-        json data "the raw API response body"
-    }
-    HUBS {
-        string hub_id PK "e.g. denver"
-        string city
-        string state
-        float lat
-        float lon
-        string county_fips "joins to declarations"
-        string region "US Census region"
-        int pop_rank
-    }
-    DAILY_WEATHER {
-        string hub_id PK, FK
-        string date PK "2021-01-01 .. 2025-12-31"
-        float tmax "C"
-        float tmin "C"
-        float precip_sum "mm"
-        float rain_sum "mm"
-        float snowfall_sum "cm"
-        float wind_gusts_max "km/h"
-        float wind_speed_max "km/h"
-        int weather_code
-    }
-    DISASTER_DECLARATIONS {
-        int disaster_number PK
-        string county_fips PK
-        string incident_type "Hurricane, Severe Storm, ..."
-        string declaration_type "DR, EM, FM"
-        string title
-        string declaration_date
-        string incident_begin_date
-    }
-    INGEST_RUNS {
-        int run_id PK
-        string source "weather or declarations"
-        string params "hub or county, dates"
-        string started_at
-        string finished_at
-        int rows
-        string status
-        string detail "cache or api + cache location"
-    }
-    CONVERSATIONS {
-        string session_id PK
-        int turn PK
-        string role "user or assistant"
-        string content "question, or the answer JSON"
-        string created_at
-    }
-    HUB_DISRUPTION {
-        string hub_id PK, FK "in memory, computed at startup"
-        float total_days_per_year "the KPI"
-        json hazards "per hazard: days, drivers, events"
-        json declarations_counted "FEMA disasters used"
-        float weather_coverage
-    }
-    DAY_RECORD {
-        string hub_id FK "in memory"
-        string date "disruption day, or disaster start"
-        string hazard
-        float value "severity, or days per disaster"
-        string channel "weather or declarations"
-        string label "the rule behind it"
-        string event "event or disaster id"
-    }
+---
+config:
+  flowchart:
+    curve: basis
+    nodeSpacing: 25
+    rankSpacing: 60
+---
+flowchart LR
+    subgraph L1["1 · Inputs"]
+        direction TB
+        Y["<b>config/hubs.yaml</b><br/>50 hubs<br/><i>edited by analysts</i>"]
+        HC["<b>HTTPCACHE</b><br/>Redis or data/raw/ files<br/>97 API responses<br/><i>original data, audit trail</i>"]
+    end
 
-    HTTPCACHE ||--o{ DAILY_WEATHER : "1 response per hub, parsed into 1,826 days"
-    HTTPCACHE ||--o{ DISASTER_DECLARATIONS : "1 response per county"
-    INGEST_RUNS }o--|| HTTPCACHE : "logs each fetch and where it came from"
-    HUBS ||--o{ DAILY_WEATHER : "hub_id"
-    HUBS }o--o{ DISASTER_DECLARATIONS : "county_fips (join, not a foreign key)"
-    HUBS ||--|| HUB_DISRUPTION : "scored at startup"
-    HUB_DISRUPTION ||--o{ DAY_RECORD : "keeps its records"
-    DAILY_WEATHER ||--o{ DAY_RECORD : "weather channel: rule triggers + recovery days"
-    DISASTER_DECLARATIONS ||--o{ DAY_RECORD : "declarations channel: counted DR disasters"
+    subgraph L2["2 · SQLite (from the parquet snapshot)"]
+        direction TB
+        H["<b>HUBS</b><br/>key: hub_id · 50 rows<br/><i>where each hub is</i>"]
+        W["<b>DAILY_WEATHER</b><br/>key: hub_id + date · 91,300 rows<br/><i>what the weather was</i>"]
+        D["<b>DISASTER_DECLARATIONS</b><br/>key: disaster + county · 669 rows<br/><i>which disasters hit the county</i>"]
+        I["<b>INGEST_RUNS</b><br/>one row per download<br/><i>when the data was loaded</i>"]
+        C["<b>CONVERSATIONS</b><br/>key: session + turn<br/><i>chat history for follow-ups</i>"]
+    end
+
+    subgraph L3["3 · Memory (computed at startup)"]
+        direction TB
+        R["<b>DAY_RECORD</b><br/>one per disruption day or disaster<br/><i>when, which hazard, why</i>"]
+        K["<b>HUB_DISRUPTION</b><br/>one per hub<br/><i>the KPI: days per year</i>"]
+    end
+
+    Y --> H
+    HC -- "per hub" --> W
+    HC -- "per county" --> D
+    HC -. "logged" .-> I
+    H -- "hub_id" --> W
+    H -- "county_fips" --> D
+    W -- "weather rules" --> R
+    D -- "counted disasters" --> R
+    R -- "sum per hub" --> K
+
+    classDef cache fill:#fff4e5,stroke:#d9822b,color:#3d2a12
+    classDef sql fill:#e8f1fb,stroke:#3b78c3,color:#13263d
+    classDef mem fill:#eaf6ec,stroke:#3c9a52,color:#14301b
+    classDef chat fill:#f3eefa,stroke:#7d5bb5,color:#271a3b
+    classDef layer fill:#fafafa,stroke:#c8c8c8,color:#444
+    class HC,Y cache
+    class H,W,D,I sql
+    class C chat
+    class R,K mem
+    class L1,L2,L3 layer
 ```
 
-## Tables
+## Purpose of each table
 
-| Table | Storage | Rows | Written by | Read by |
+| Table | Layer | Purpose | Written by | Read by |
 |---|---|---|---|---|
-| `httpcache` | Redis (`REDIS_URL`) or `data/raw/*.json` (git) | 97 (50 + 47) | ingestion | ingestion only |
-| `hubs` | SQLite, from `config/hubs.yaml`; parquet snapshot | 50 | ingestion | engine, API |
-| `daily_weather` | SQLite; parquet snapshot | 91,300 | ingestion (Open-Meteo) | engine, `weather_stat` |
-| `disaster_declarations` | SQLite; parquet snapshot | 669 rows: 481 distinct disasters, one row per disaster and county | ingestion (OpenFEMA) | engine |
-| `ingest_runs` | SQLite; parquet snapshot | one per fetch | ingestion | `--status`, audit |
-| `conversations` | SQLite only (not committed) | 2 per chat question | `/chat` | `/chat` (last 6 turns) |
-| `HubDisruption` | memory | 50 | engine at startup | all tools, `/rankings`, `/hubs` |
-| `DayRecord` | memory (inside `HubDisruption`) | one per disruption day or counted disaster | engine | month / season / year breakdowns |
+| `HTTPCACHE` | Redis (`REDIS_URL`) or `data/raw/*.json` (git) | Original API responses, never expire: audit trail and quota protection | ingestion | ingestion only |
+| `HUBS` | SQLite + parquet snapshot | The 50 hubs: location, county, Census region; the table everything joins to | ingestion (from `config/hubs.yaml`) | engine, API |
+| `DAILY_WEATHER` | SQLite + parquet snapshot | One row per hub per day, 2021-2025 | ingestion (Open-Meteo) | engine, `weather_stat` |
+| `DISASTER_DECLARATIONS` | SQLite + parquet snapshot | FEMA disasters per county since 2006: the rare events 5 years of weather cannot show | ingestion (OpenFEMA) | engine |
+| `INGEST_RUNS` | SQLite + parquet snapshot | Log of every download (source, rows, cache or API, status) | ingestion | `ingest --status`, audit |
+| `CONVERSATIONS` | SQLite only (not committed) | Chat history, so follow-up questions have context | `/chat` | `/chat` (last 6 turns) |
+| `DAY_RECORD` | memory | Every disruption day and counted disaster after the rules: the source of all time breakdowns | engine at startup | month / season / year tools |
+| `HUB_DISRUPTION` | memory | The KPI per hub, split by hazard, with drivers | engine at startup | all tools, `/rankings`, `/hubs` |
+
+## Columns
+
+| Table | Columns (key in bold) |
+|---|---|
+| `HTTPCACHE` | **key** (`httpcache:<source>:<hash>`), url, params (API key excluded), fetched_at, data (raw body) |
+| `HUBS` | **hub_id**, city, state, lat, lon, county_fips, region, pop_rank |
+| `DAILY_WEATHER` | **hub_id**, **date**, tmax, tmin (C), precip_sum, rain_sum (mm), snowfall_sum (cm), wind_gusts_max, wind_speed_max (km/h), weather_code |
+| `DISASTER_DECLARATIONS` | **disaster_number**, **county_fips**, incident_type, declaration_type (DR / EM / FM), title, declaration_date, incident_begin_date |
+| `INGEST_RUNS` | **run_id**, source, params, started_at, finished_at, rows, status, detail (cache or API + cache location) |
+| `CONVERSATIONS` | **session_id**, **turn**, role, content, created_at |
+| `DAY_RECORD` | hub, date, hazard, value (severity, or days per disaster), channel (weather / declarations), label (rule), event |
+| `HUB_DISRUPTION` | **hub_id**, total_days_per_year, hazards (days, drivers, events per hazard), declarations_counted, weather_coverage |
 
 ## Connections worth knowing
 - **Hubs to declarations is many-to-many through the county.** 50 hubs sit in 47 counties
   (Phoenix and Mesa share Maricopa County, Los Angeles and Long Beach share Los Angeles County,
-  Fort Worth and Arlington share Tarrant County),
-  and a county has many disasters. It is a join on `county_fips`, not a foreign key.
+  Fort Worth and Arlington share Tarrant County), and a county has many disasters. It is a join on
+  `county_fips`, not a foreign key.
 - **One cache entry per API request:** Open-Meteo is fetched per hub (one response = 1,826 daily
-  rows), OpenFEMA per county. The cache key hashes the URL and parameters (API key excluded).
-- **`DayRecord` is the bridge to time breakdowns:** every disruption day (weather) and every counted
-  disaster (declarations) is one record, so the annual KPI and every month, season or year
-  breakdown are sums over the same records.
+  rows), OpenFEMA per county.
+- **`DAY_RECORD` is the bridge to time breakdowns:** the annual KPI and every month, season or year
+  breakdown are sums over the same records, so they always agree.
 - **Not shown:** `hub_scores` exists in the schema but is no longer written (scores moved to memory);
   it is the natural place to store score history for the planned risk-change alerts.
   Chat trajectories are JSON files (`data/trajectories/`), not a table.
