@@ -124,3 +124,16 @@ def test_incomplete_weather_is_flagged_and_not_ranked():
     out = rank([full, partial])
     assert [r["hub_id"] for r in out["ranking"]] == ["test"]
     assert out["excluded_incomplete_data"] == ["partial"]
+
+
+def test_multi_condition_rule_needs_all_conditions():
+    from app.config import WeatherRule
+    rule = WeatherRule(hazard="winter", severity=1.0, recovery_days=1, label="ice",
+                       conditions=[{"variable": "rain_sum", "op": ">=", "threshold": 1},
+                                   {"variable": "tmax", "op": "<=", "threshold": 1}])
+    from app.scoring.disruption import _rule_mask
+    df = calm_year(3)
+    set_day(df, 0, rain_sum=5.0, tmax=0.0)   # rain + freezing -> ice
+    set_day(df, 1, rain_sum=5.0)             # rain, warm -> no
+    set_day(df, 2, tmax=-5.0)                # cold, dry -> no
+    assert _rule_mask(df, rule).tolist() == [True, False, False]

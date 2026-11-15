@@ -63,13 +63,21 @@ class HubDisruption(BaseModel):
 
 # ---------------------------------------------------------------- weather channel
 
+_OPS = {">=": np.greater_equal, "<=": np.less_equal, "<": np.less}
+
+
 def _rule_mask(df: pd.DataFrame, rule: WeatherRule) -> np.ndarray:
-    col = df[rule.variable]
-    if rule.op == "in":
-        return col.isin(rule.threshold).to_numpy()
-    values = col.to_numpy(dtype=float)  # NaN compares False -> missing data never triggers
-    with np.errstate(invalid="ignore"):
-        return values >= rule.threshold if rule.op == ">=" else values <= rule.threshold
+    """True on days where ALL of the rule's conditions hold."""
+    mask = np.ones(len(df), dtype=bool)
+    for c in rule.conditions:
+        col = df[c.variable]
+        if c.op == "in":
+            mask &= col.isin(c.threshold).to_numpy()
+        else:
+            values = col.to_numpy(dtype=float)  # NaN compares False -> missing data never triggers
+            with np.errstate(invalid="ignore"):
+                mask &= _OPS[c.op](values, c.threshold)
+    return mask
 
 
 def classify_days(daily: pd.DataFrame, cfg: DisruptionConfig) -> pd.DataFrame:

@@ -43,23 +43,44 @@ WEATHER_VARIABLES = {"tmax", "tmin", "precip_sum", "rain_sum", "snowfall_sum",
                      "wind_gusts_max", "wind_speed_max", "weather_code"}
 
 
-class WeatherRule(BaseModel):
-    """A daily trigger: if `variable op threshold`, the day loses `severity` of a day."""
+class Condition(BaseModel):
+    """One test on a daily value: `variable op threshold`."""
     model_config = ConfigDict(extra="forbid")
-    hazard: str
     variable: str
-    op: Literal[">=", "<=", "in"]
+    op: Literal[">=", "<=", "<", "in"]
     threshold: float | list[int]
-    severity: float = Field(gt=0, le=1)
-    recovery_days: int = Field(ge=0)
-    label: str
 
     @model_validator(mode="after")
     def check(self):
         if self.variable not in WEATHER_VARIABLES:
             raise ValueError(f"unknown weather variable '{self.variable}'")
         if (self.op == "in") != isinstance(self.threshold, list):
-            raise ValueError(f"rule '{self.label}': op 'in' needs a list threshold, other ops a number")
+            raise ValueError(f"{self.variable}: op 'in' needs a list threshold, other ops a number")
+        return self
+
+
+class WeatherRule(BaseModel):
+    """A daily trigger: if ALL conditions hold, the day loses `severity` of a day.
+
+    Single-condition rules can be written inline (variable/op/threshold) for readability.
+    """
+    model_config = ConfigDict(extra="forbid")
+    hazard: str
+    conditions: list[Condition] = []
+    variable: str | None = None
+    op: Literal[">=", "<=", "<", "in"] | None = None
+    threshold: float | list[int] | None = None
+    severity: float = Field(gt=0, le=1)
+    recovery_days: int = Field(ge=0)
+    label: str
+
+    @model_validator(mode="after")
+    def normalise(self):
+        if self.variable is not None:
+            self.conditions = [Condition(variable=self.variable, op=self.op, threshold=self.threshold),
+                               *self.conditions]
+        if not self.conditions:
+            raise ValueError(f"rule '{self.label}' has no conditions")
         return self
 
 
