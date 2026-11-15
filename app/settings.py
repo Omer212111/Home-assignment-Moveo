@@ -12,6 +12,10 @@ class Settings(BaseSettings):
     # LLM
     llm_model: str = "claude-sonnet-5-5"  # cheaper than Opus 5.5; reliable tool use + JSON schema
     llm_effort: str = "low"  # chat latency matters more than deep reasoning here; tools do the maths
+    # API key: read from .env or the environment. AGENT_ANTHROPIC_API_KEY wins, so a hosted
+    # environment can set the agent's key without touching a tool's own ANTHROPIC_API_KEY.
+    agent_anthropic_api_key: str | None = None
+    anthropic_api_key: str | None = None
 
     # Storage
     db_path: Path = ROOT / "data" / "weather_risk.db"

@@ -5,20 +5,14 @@
     uv run python -m app.scoring.report --hub dallas     # full breakdown for one hub
 """
 import argparse
-from datetime import date
 
-from app import db
 from app.config import load_scoring
-from app.scoring.disruption import HubDisruption, compute_all, rank
-from app.settings import settings
+from app.scoring import service
+from app.scoring.disruption import HubDisruption, rank
 
 
 def current_results() -> list[HubDisruption]:
-    db.restore_snapshot()
-    window = (date.fromisoformat(settings.history_start), date.fromisoformat(settings.history_end))
-    return compute_all(db.read_df("SELECT * FROM daily_weather"),
-                       db.read_df("SELECT * FROM disaster_declarations"),
-                       db.read_df("SELECT * FROM hubs ORDER BY pop_rank"), load_scoring(), window)
+    return service.load_results(restore=True)
 
 
 def print_hub(r: HubDisruption):

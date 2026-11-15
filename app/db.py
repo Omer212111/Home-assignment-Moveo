@@ -32,6 +32,10 @@ CREATE TABLE IF NOT EXISTS hub_scores (
     scoring_version TEXT, data_as_of TEXT, computed_at TEXT,
     PRIMARY KEY (hub_id, hazard, scoring_version, computed_at)
 );
+CREATE TABLE IF NOT EXISTS conversations (
+    session_id TEXT, turn INTEGER, role TEXT, content TEXT, created_at TEXT,
+    PRIMARY KEY (session_id, turn)
+);
 CREATE TABLE IF NOT EXISTS ingest_runs (
     run_id INTEGER PRIMARY KEY AUTOINCREMENT, source TEXT, params TEXT,
     started_at TEXT, finished_at TEXT, rows INTEGER, status TEXT, detail TEXT
