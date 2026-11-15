@@ -237,7 +237,7 @@ Results so far (details and what changed after each run in `docs/EVALS.md`):
 | Source | Used for | Coverage |
 |---|---|---|
 | [Open-Meteo Historical Weather API](https://open-meteo.com/en/docs/historical-weather-api) (ERA5 reanalysis) | daily temperature, rain, snowfall, precipitation, wind gusts | 50 hubs x 1,826 days (2021-2025), 91,300 rows |
-| [OpenFEMA Disaster Declarations](https://www.fema.gov/openfema-data-page/disaster-declarations-summaries-v2) | hurricanes, severe storms per county | 47 counties, 669 disasters (2006-2026) |
+| [OpenFEMA Disaster Declarations](https://www.fema.gov/openfema-data-page/disaster-declarations-summaries-v2) | hurricanes, severe storms per county | 47 counties, 669 rows = 481 distinct disasters (2006-2026) |
 | `config/hubs.yaml` | the 50 hubs: coordinates, county FIPS, Census region | |
 
 The data is downloaded once by an offline command, never by the web service:
@@ -307,6 +307,8 @@ Diagrams and component table: `docs/ARCHITECTURE.md`.
 | Database | **SQLite** (`data/weather_risk.db`, rebuilt at startup) | The same tables + chat conversations | Small relational data, SQL for checks, no server to run; one container needs no more |
 | Scores | In memory | Computed scores and per-day disruption records | Recomputed in ~1 s at startup; data only changes when ingestion runs |
 | Trajectories | JSON files (`data/trajectories/`, `evals/trajectories/`) | Step-by-step record of each question | Easy to open, diff and attach to a bug report |
+
+All tables and how they connect: `docs/DATA_MODEL.md` (entity-relationship diagram).
 
 Scale-out path: Postgres instead of SQLite for several app instances; Redis also for shared chat
 sessions and live data with a short expiry (e.g. NWS alerts).
@@ -387,6 +389,7 @@ dollars, tail risk, FEMA National Risk Index, uncertainty ranges) are in `docs/I
 | Document | Contents |
 |---|---|
 | `docs/ARCHITECTURE.md` | Component diagram, chat sequence, component table |
+| `docs/DATA_MODEL.md` | Entity-relationship diagram of every table (Redis cache, SQLite, in-memory) |
 | `docs/DESIGN_DECISIONS.md` | Every design decision with the options considered and why (API, agent, UI, tools, guardrails, caching, Redis) |
 | `docs/QUESTION_CATALOG.md` | The questions an analyst will ask, and which tool answers each |
 | `docs/EVALS.md` | Eval cases and the analysis of every run |
