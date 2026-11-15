@@ -22,7 +22,9 @@ from app.settings import settings
 from evals.checks import args_mismatch, ranking_mismatch, ungrounded_numbers, wrong_count_claims
 
 HERE = Path(__file__).parent
-PRICE_IN, PRICE_OUT = 2.0, 10.0  # USD per million tokens, claude-sonnet-5-5 list price (estimate only)
+# USD per million tokens, claude-sonnet-5-5 list price (estimate only): uncached input, cache write
+# (1.25x, 5-minute cache), cache read, output.
+PRICE_IN, PRICE_CACHE_WRITE, PRICE_CACHE_READ, PRICE_OUT = 2.0, 2.5, 0.10, 10.0
 
 
 def check_turn(result, expect: dict, user_texts: list[str]) -> list[tuple[str, str | None]]:
@@ -69,6 +71,7 @@ def main(argv=None):
     service.load_results(restore=True)
 
     report, n_checks, n_failed, tok_in, tok_out = [], 0, 0, 0, 0
+    tok_read = tok_write = 0
     print(f"model: {settings.llm_model} (effort {settings.llm_effort})\n")
     for case in cases:
         history, user_texts = [], []
@@ -92,11 +95,13 @@ def main(argv=None):
             secs = time.perf_counter() - t0
             tok_in += result.input_tokens
             tok_out += result.output_tokens
+            tok_read += result.cache_read_tokens
+            tok_write += result.cache_write_tokens
             checks = check_turn(result, turn.get("expect", {}), user_texts)
             n_checks += len(checks)
             n_failed += sum(1 for _, err in checks if err)
             print(f"  turn {i}: \"{q}\"  ({secs:.1f}s, {result.steps} model calls, "
-                  f"{result.input_tokens}+{result.output_tokens} tokens)")
+                  f"{result.input_tokens}+{result.output_tokens} tokens, {result.cache_read_tokens} cached)")
             for c in result.tool_calls:
                 print(f"      tool @ model call {c.step}: {c.name}({json.dumps(c.input)})"
                       f"{'  [CACHED duplicate]' if c.cached else ''}{'  [ERROR]' if c.is_error else ''}")
@@ -116,9 +121,11 @@ def main(argv=None):
 
     dupes = sum(1 for e in report for c in e.get("tool_calls", []) if c["cached"])
     print(f"duplicate tool calls (served from cache): {dupes}")
-    cost = tok_in / 1e6 * PRICE_IN + tok_out / 1e6 * PRICE_OUT
+    uncached = tok_in - tok_read - tok_write
+    cost = (uncached * PRICE_IN + tok_write * PRICE_CACHE_WRITE + tok_read * PRICE_CACHE_READ
+            + tok_out * PRICE_OUT) / 1e6
     print(f"RESULT: {n_checks - n_failed}/{n_checks} checks passed; "
-          f"{tok_in}+{tok_out} tokens, ~${cost:.2f} (list-price estimate)")
+          f"{tok_in}+{tok_out} tokens ({tok_read} input tokens from cache), ~${cost:.2f} (list-price estimate)")
     (HERE / "report.json").write_text(json.dumps({
         "run_at": datetime.now(timezone.utc).isoformat(timespec="seconds"), "model": settings.llm_model,
         "checks": n_checks, "failed": n_failed, "tokens": [tok_in, tok_out], "turns": report,

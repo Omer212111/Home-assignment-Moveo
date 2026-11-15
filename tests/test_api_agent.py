@@ -266,15 +266,32 @@ def test_repeated_calls_force_an_answer_and_failures_keep_their_trajectory(api, 
     assert fake.requests[2]["tool_choice"] == {"type": "none"}
     assert res.trajectory[-2]["tools_disabled"] == "only repeated calls before"
 
-    # Different calls each round are allowed until the last call, which must answer.
-    fake = FakeClient([_msg("tool_use", _tool_use("rank_hubs", {**args, "top_n": n}, f"t{n}"))
-                       for n in range(1, loop.MAX_STEPS)] + [_msg("end_turn", _text("not json"))])
+    # Different calls: two tool rounds, then the model must answer (eval run 6: wandering).
+    fake = FakeClient([_msg("tool_use", _tool_use("rank_hubs", {**args, "top_n": n}, f"t{n}")) for n in (1, 2)]
+                      + [_msg("end_turn", _text("not json")), _msg("end_turn", _text("still not json"))])
     monkeypatch.setattr(loop, "client", lambda: fake)
     with pytest.raises(loop.AgentError) as err:
         loop.ask("x")
-    assert fake.requests[-1]["tool_choice"] == {"type": "none"}
-    assert [e["type"] for e in err.value.trajectory].count("model_call") == loop.MAX_STEPS
+    assert "tool_choice" not in fake.requests[1] and fake.requests[2]["tool_choice"] == {"type": "none"}
+    assert fake.requests[3]["tool_choice"] == {"type": "none"}   # still forced on the schema retry
+    assert [e["type"] for e in err.value.trajectory].count("model_call") == 4
 
     from app.agent import trajectory
     text = trajectory.render(json.loads(trajectory.save("x", "s", None, error=err.value).read_text(encoding="utf-8")))
-    assert "FAILED:" in text and "tools disabled: last allowed call" in text
+    assert "FAILED:" in text and "tools disabled: 2 tool rounds used" in text
+
+
+def test_error_rounds_do_not_count_and_ranking_attach_keeps_the_longest(api, monkeypatch):
+    base = {"hazard": "total", "region": None, "order": "most", "season": None, "months": None}
+    fake = FakeClient([
+        _msg("tool_use", _tool_use("rank_hubs", {**base, "top_n": 50}, "a")),
+        _msg("tool_use", _tool_use("rank_hubs", {**base, "hazard": "volcano", "top_n": 3}, "b")),  # error
+        _msg("tool_use", _tool_use("rank_hubs", {**base, "top_n": 10}, "c")),   # 2nd counted round
+        _msg("end_turn", _text(_answer())),
+    ])
+    monkeypatch.setattr(loop, "client", lambda: fake)
+    res = loop.ask("Show me the top 100 riskiest hubs.")
+    assert "tool_choice" not in fake.requests[2]          # the error round did not use up a round
+    assert fake.requests[3]["tool_choice"] == {"type": "none"}
+    assert len(res.answer.ranking) == 50                 # eval run 3: not the later top 10
+    assert all(r.get("cache_control") == {"type": "ephemeral"} for r in fake.requests)

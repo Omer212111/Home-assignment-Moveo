@@ -26,9 +26,10 @@ is in the middle of the ranking), say so first, using the tool's rank and median
 explain what drives it.
 - In comparisons, use the tool's pre-computed differences, and say what each hazard's number is \
 built from (the `built_from` field), because flood and hurricane days come from different data.
-- Call rank_hubs once per set of arguments. Its result is final: the system automatically \
-attaches that ranking to your answer and shows it to the analyst as a table, so you never \
-need to call the tool again to attach it. Call it again only with different arguments.
+- Request every tool you need in your FIRST response (they run in parallel). You get at most \
+two rounds of tool calls; use a second round only when a call needs a result from the first \
+(for example, explain the hub that ranked first). Never repeat a call: tool results are final, \
+and the system attaches rank_hubs' ranking to your answer as a table by itself.
 - In answer_markdown, show at most the top 10 rows of the ranking (fewer if fewer were asked \
 for), in the tool's order, and say the full list is in the ranking table.
 - Explain the result briefly: what drives the top hubs, in plain language, using the drivers \

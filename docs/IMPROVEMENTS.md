@@ -51,6 +51,8 @@ tokens, ~2 s). It also exposed a user-visible bug. Proposed fixes, in priority o
 | D | **Smaller tool result for long rankings:** full detail for rows 1-10, only rank/city/days for rows 11-50 (the server keeps the full result for the UI). | `impossible_n` is the most expensive case (~29k input tokens); the 50 detailed rows are re-sent on every later model call. |
 | E | **Prompt caching** on system prompt, tools and history. | Makes any extra round trip, and every follow-up, much cheaper. |
 
+Status after eval run 6: **A done**, **E done**, C replaced by the tool-round limit (`DESIGN_DECISIONS.md` section 15); B and D still open.
+
 Deliberately not done yet: forbidding tools after the first tool round (`tool_choice: none`). It is
 the only hard stop for extra round trips, but it would block chained questions such as "why is the
 riskiest hub so high?" (rank, then explain). Revisit once the slice-3 tools exist.

@@ -87,7 +87,8 @@ class WeatherStatInput(_Period):
     condition_op: Literal[">", ">=", "<", "<="] | None = Field(
         description='for count_days: comparison, e.g. ">" with 0 for "days with any snowfall"; null otherwise')
     condition_value: float | None = Field(description="for count_days: threshold in the variable's unit; null otherwise")
-    year: Year | None = Field(description="one calendar year; null for all years in the data")
+    year: Year | None = Field(description=f'one calendar year; "last year" means {settings.history_end[:4]} '
+                                          f'(the latest full year in the data); null for all years')
 
     @model_validator(mode="after")
     def _condition(self):

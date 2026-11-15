@@ -311,3 +311,36 @@ breakdown, weather). Adding `period` to the existing tools instead of new "seaso
 Also found while testing: an invalid-argument error from a model validator contained a Python
 exception object, which would have crashed the loop when sent back to the model; errors are now
 returned without that context.
+
+---
+
+## 15. Tool rounds, prompt caching and ranking attach (after eval run 6)
+
+**The evidence.** Run 6 repeated an identical call in 14 of 17 turns. The trajectory of
+`safest_hubs` shows model call 2 with **no thinking and no text**: the same call re-sent in 1.8 s.
+Not a reasoned choice, so prompt wording (tried in runs 2 and 3) cannot be relied on.
+
+**Options considered** (with the user):
+| Option | Stops repeats | Stops wandering | Chains (B needs A's result) | Prompt cache |
+|---|---|---|---|---|
+| ReAct, one tool per step | no (it is today's loop; the model decides when to stop) | no | yes | intact |
+| Remove the just-used tool from the next request | yes | no | yes | broken (tool list changes) |
+| One parallel round, then answer | yes | yes | no | intact |
+| **At most two rounds + retry after an error** (chosen) | repeats cost at most one round | bounded | yes | intact |
+
+**Chosen:** at most `MAX_TOOL_ROUNDS = 2` successful tool rounds; then `tool_choice: none` forces
+the answer. A round in which a tool returned an error does not count, so the model can correct
+invalid arguments (bounded by `MAX_STEPS = 6`). The repeated-only guardrail (section 13) stays.
+The tool list never changes, so the cached prefix stays valid. The prompt asks for all
+independent tools in the first response.
+
+**Prompt caching:** top-level `cache_control: {type: "ephemeral"}` (automatic caching). The tools
++ system prompt (~6k tokens) are identical for every call and every question, and within one
+question each call re-sends the previous messages; cached reads cost ~5% of the input price.
+Token counts now include cache reads and writes, and the eval cost estimate prices them separately.
+
+**Ranking attach (fix A):** among `rank_hubs` calls with the same filters as the last one, the
+server attaches the one with the largest `top_n` (run 3: 50 then 10 showed 10 hubs).
+
+**"Last year":** the `year` field's description now names the year (2025), so the model does not
+have to look up `latest_full_year` first (run 6: it first called with no year).

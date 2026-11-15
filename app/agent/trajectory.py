@@ -35,9 +35,12 @@ def model_call_event(step: int, response, duration_ms: int) -> dict:
             blocks.append({"type": "tool_use", "name": b.name, "input": b.input})
         else:  # e.g. a refusal "fallback" block: keep that it happened
             blocks.append({"type": t})
+    u = response.usage
+    reads = getattr(u, "cache_read_input_tokens", 0) or 0
+    writes = getattr(u, "cache_creation_input_tokens", 0) or 0
     return {"type": "model_call", "step": step, "model": response.model, "stop_reason": response.stop_reason,
-            "duration_ms": duration_ms, "input_tokens": response.usage.input_tokens,
-            "output_tokens": response.usage.output_tokens, "blocks": blocks}
+            "duration_ms": duration_ms, "input_tokens": u.input_tokens + reads + writes,
+            "cache_read_tokens": reads, "output_tokens": u.output_tokens, "blocks": blocks}
 
 
 def result_summary(name: str, result: dict, is_error: bool) -> str:
@@ -96,7 +99,7 @@ def render(data: dict) -> str:
     for e in data["trajectory"]:
         if e["type"] == "model_call":
             out.append(f"[model call {e['step']}] {e['duration_ms']} ms, {e['input_tokens']}+{e['output_tokens']} "
-                       f"tokens, stop: {e['stop_reason']}"
+                       f"tokens ({e.get('cache_read_tokens', 0)} from cache), stop: {e['stop_reason']}"
                        + (f"  (tools disabled: {e['tools_disabled']})" if e.get("tools_disabled") else ""))
             for b in e["blocks"]:
                 if b["type"] == "thinking":
