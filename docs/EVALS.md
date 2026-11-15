@@ -68,10 +68,11 @@ Findings:
 3. Fixes are listed in `docs/IMPROVEMENTS.md` section 8 (postponed in favour of the remaining
    chat-bot capabilities).
 
-## Run 4 (slice 3 + trajectories): 30/33 checks, 3 turns failed, ~$0.15
+## Run 4 (slice 3): 30/33 checks, 3 turns failed, ~$0.15
 
-Changes since run 3: `explain_hub` and `compare_hubs`, a longer prompt, and thinking requested with
-`display: "summarized"` (for trajectories). Result: a regression.
+Code under test: slice 3 only (`explain_hub`, `compare_hubs`, a longer prompt). The run was made
+before the trajectory commit, so thinking display was still the API default (`omitted`) and no
+trajectories were saved. Result: a regression.
 
 | Case | Model calls | Result |
 |---|---|---|
@@ -84,7 +85,9 @@ Changes since run 3: `explain_hub` and `compare_hubs`, a longer prompt, and thin
 | explain_premise | 6 | **no answer** (turn 2 not run) |
 
 Finding: repeated tool calls went from occasional (runs 2-3) to a loop that uses up all 6 model
-calls. The failed turns raised an error before a trajectory was saved, so their steps were lost.
+calls, including in `impossible_n`, which only uses `rank_hubs`. So the trigger is something in
+slice 3 shared by all questions: the larger tool list or the new prompt rules (a suspect is
+"Call all the tools you need in one response"). Without trajectories the exact cause is unknown.
 
 Changes:
 1. **Guardrail in the loop (deterministic):** after a round in which every call repeated an
@@ -94,5 +97,6 @@ Changes:
 2. Failures now keep their trajectory (`AgentError.trajectory`); the eval runner and `/chat` save it.
 3. The cached-call note now tells the model to use the earlier result and answer.
 
-Open question for run 5: whether `display: "summarized"` made the repeats more frequent. If the
-trajectories show it, compare with `LLM_THINKING_DISPLAY=omitted`.
+Run 5 is the first run with trajectories (and with `display: "summarized"`), so it changes two
+things at once: the guardrail stops the loop, and the trajectories should show *why* the model
+repeats (its thinking summary before each repeated call).
