@@ -169,3 +169,24 @@ Findings:
    `hub_breakdown(boston, minneapolis)` (correct), then an extra `hub_breakdown(boston)`; the args
    check looks only at the last call of the tool.
 5. `snowfall_percentage` used `year: 2025` on the first call (run 6: corrected only on the second).
+
+## Run 8 (index and tiers, scores from the database): 109/111 checks, ~$0.57
+
+The index / tier fields and the database-backed scores changed nothing in the agent's behaviour:
+every tool choice and argument is right, numbers stay grounded (index values come from tool results).
+
+| | Run 7 | Run 8 |
+|---|---|---|
+| Cost | $0.55 | $0.57 |
+| Input tokens from cache | 63% | 59% |
+| Repeated identical calls | 10 | 7 |
+| Turns with a second tool round | 14 / 17 | 12 / 17 |
+
+Findings:
+1. **Both failures are in the checks, not in the answer.** `impossible_n` called `top_n=50`, then
+   `top_n=10`. The server attached the 50-row ranking (fix A: largest list with the same filters),
+   which is what the user asked for. But both checks still look at the *last* call: `tool
+   arguments` saw `top_n=10`, and `ranking = engine` compared the 50 attached rows with the
+   engine's 10-row ranking (the printed first 5 rows are identical; the lengths differ).
+2. The second round is still used in most turns, now more often for "enrichment" (explain the top
+   hub after a ranking, a season breakdown of the leader) than for identical repeats.
