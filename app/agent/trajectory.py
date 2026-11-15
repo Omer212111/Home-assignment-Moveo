@@ -47,13 +47,24 @@ def result_summary(name: str, result: dict, is_error: bool) -> str:
     if name == "rank_hubs":
         rows = result.get("ranking", [])
         top = ", ".join(f"{r['city']} {r['days_per_year']:.2f}" for r in rows[:3])
-        return f"{len(rows)} hubs ranked ({result.get('hazard')}, region {result.get('region') or 'all'}); top: {top}"
+        return (f"{len(rows)} hubs ranked ({result.get('hazard')}, region {result.get('region') or 'all'}, "
+                f"{result.get('period', 'whole year')}, {result.get('order', 'most exposed first')}); top: {top}")
     if name == "explain_hub":
         c = result["context"]
         return (f"{result['hub']['city']}: {result['total_days_per_year']:.2f} days/yr, rank {c['overall_rank']} "
                 f"of {c['hubs_ranked']} (median {c['median_hub_days_per_year']})")
     if name == "compare_hubs":
-        return "compared " + ", ".join(f"{h['hub']['city']} {h['total_days_per_year']:.2f}" for h in result["hubs"])
+        return (f"compared ({result.get('period', 'whole year')}) "
+                + ", ".join(f"{h['hub']['city']} {h['total_days_per_year']:.2f}" for h in result["hubs"]))
+    if name == "hub_breakdown":
+        return f"by {result['by']}: " + "; ".join(
+            f"{h['hub']['city']} highest {h['highest_period']}, lowest {h['lowest_period']}" for h in result["hubs"])
+    if name == "weather_stat":
+        def one(h):
+            if "percentage_of_days" in h:
+                return f"{h['hub']['city']} {h['days_matching']}/{h['days_in_period']} days ({h['percentage_of_days']}%)"
+            return f"{h['hub']['city']} {h.get('value')}"
+        return f"{result['variable']}, {result['period']}: " + ", ".join(one(h) for h in result["hubs"])
     return f"{len(json.dumps(result))} characters"
 
 

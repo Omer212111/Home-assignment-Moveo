@@ -14,7 +14,7 @@ from datetime import date, timedelta
 
 import numpy as np
 import pandas as pd
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from app.config import DisruptionConfig, WeatherRule
 
@@ -45,6 +45,20 @@ class CountedDeclaration(BaseModel):
     declaration_date: str
     hazard: str
     days: float
+    incident_begin_date: str | None = None
+
+
+class DayRecord(BaseModel):
+    """One disruption day (weather channel) or one counted disaster (declarations channel).
+
+    The engine keeps these so any time breakdown (month, season, year) is a sum over the same
+    records as the annual total: the months always add up to the year."""
+    date: date
+    hazard: str
+    value: float     # weather: severity of that day; declarations: days counted for the disaster
+    channel: str     # "weather" | "declarations"
+    label: str       # the rule behind it (for drivers)
+    event: str       # event id, to count distinct events behind a number
 
 
 class HubDisruption(BaseModel):
@@ -59,6 +73,10 @@ class HubDisruption(BaseModel):
     weather_period: str | None
     weather_days_deduplicated: int   # weather days dropped because a declaration covers them
     declarations_counted: list[CountedDeclaration]
+    # For time breakdowns (app/scoring/periods.py); not part of the API response.
+    records: list[DayRecord] = Field(default=[], exclude=True)
+    weather_years: float = Field(default=0.0, exclude=True)       # years of weather data
+    declaration_years: float = Field(default=0.0, exclude=True)   # years of declarations
 
 
 # ---------------------------------------------------------------- weather channel
@@ -139,7 +157,9 @@ def counted_declarations(decl: pd.DataFrame, cfg: DisruptionConfig) -> list[Coun
     return [CountedDeclaration(disaster_number=int(r.disaster_number), title=str(r.title).title(),
                                incident_type=r.incident_type, declaration_date=r.declaration_date,
                                hazard=type_to_rule[r.incident_type].hazard,
-                               days=type_to_rule[r.incident_type].days_per_event)
+                               days=type_to_rule[r.incident_type].days_per_event,
+                               incident_begin_date=(str(r.incident_begin_date)[:10]
+                                                    if getattr(r, "incident_begin_date", None) else None))
             for r in d.itertuples()]
 
 
@@ -175,8 +195,14 @@ def hub_disruption(hub: dict, daily: pd.DataFrame, decl: pd.DataFrame, cfg: Disr
         drv[0] += 1
         drv[1] += c.days / years_decl
     decl_events_per_year = defaultdict(float)
+    records: list[DayRecord] = []
     for c in counted:
         decl_events_per_year[c.hazard] += 1 / years_decl
+        # Placed on the incident start (the month it happened), else the declaration date.
+        records.append(DayRecord(date=date.fromisoformat((c.incident_begin_date or c.declaration_date)[:10]),
+                                 hazard=c.hazard, value=c.days, channel="declarations",
+                                 label=next(r.label for r in cfg.declaration_rules if r.hazard == c.hazard),
+                                 event=f"DR-{c.disaster_number}"))
 
     # Weather channel
     expected_days = (window[1] - window[0]).days + 1
@@ -184,6 +210,7 @@ def hub_disruption(hub: dict, daily: pd.DataFrame, decl: pd.DataFrame, cfg: Disr
     coverage = round(n_days / expected_days, 3)
     dedup_count = 0
     period = None
+    years_wx = 0.0
     if n_days:
         dates = pd.to_datetime(daily["date"])
         period = f"{dates.min().date()}..{dates.max().date()}"
@@ -196,6 +223,9 @@ def hub_disruption(hub: dict, daily: pd.DataFrame, decl: pd.DataFrame, cfg: Disr
             dedup_count = int((~keep).sum())
             days = days[keep]
             for r in days.itertuples():
+                records.append(DayRecord(date=r.date, hazard=r.hazard, value=r.severity, channel="weather",
+                                         label=r.label,
+                                         event=f"W-{r.event_id}"))
                 h = by_hazard[r.hazard]
                 h["weather"] += r.severity / years_wx
                 h["events"].add(r.event_id)
@@ -226,7 +256,8 @@ def hub_disruption(hub: dict, daily: pd.DataFrame, decl: pd.DataFrame, cfg: Disr
         total_days_per_year=round(sum(h.days_per_year for h in hazards.values()), 3),
         hazards=hazards, weather_complete=coverage >= cfg.min_weather_coverage,
         weather_coverage=coverage, weather_period=period,
-        weather_days_deduplicated=dedup_count, declarations_counted=counted)
+        weather_days_deduplicated=dedup_count, declarations_counted=counted,
+        records=records, weather_years=years_wx, declaration_years=years_decl)
 
 
 def compute_all(daily: pd.DataFrame, decl: pd.DataFrame, hubs: pd.DataFrame, cfg: DisruptionConfig,
@@ -239,15 +270,19 @@ def compute_all(daily: pd.DataFrame, decl: pd.DataFrame, hubs: pd.DataFrame, cfg
 
 
 def rank(results: list[HubDisruption], hazard: str = "total", region: str | None = None,
-         top_n: int = 10) -> dict:
+         top_n: int = 10, months: frozenset[int] | None = None, order: str = "most") -> dict:
     """Rank hubs by expected disruption days/year. Hubs with incomplete weather data are not
     ranked against the others (their total would be understated); they are listed separately."""
     pool = [r for r in results if region is None or r.region.lower() == region.lower()]
 
     def value(r):
+        if months is not None:  # days per year within those months (e.g. a season)
+            from app.scoring.periods import period_days
+            return period_days(r, hazard, months)
         return r.total_days_per_year if hazard == "total" else r.hazards[hazard].days_per_year
 
-    complete = sorted((r for r in pool if r.weather_complete), key=lambda r: (-value(r), r.hub_id))
+    sign = -1 if order == "most" else 1
+    complete = sorted((r for r in pool if r.weather_complete), key=lambda r: (sign * value(r), r.hub_id))
     ranking = [{"rank": i, "hub_id": r.hub_id, "city": r.city, "state": r.state, "region": r.region,
                 "days_per_year": value(r)} for i, r in enumerate(complete[:top_n], 1)]
     return {"hazard": hazard, "region": region, "ranking": ranking,

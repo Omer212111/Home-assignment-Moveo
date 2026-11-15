@@ -4,6 +4,7 @@
 """
 import logging
 import uuid
+from typing import Literal
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 
@@ -16,7 +17,8 @@ from pydantic import BaseModel, Field
 from app import db
 from app.agent import trajectory
 from app.agent.loop import AgentError, AgentResult, ask
-from app.agent.schemas import Hazard, Region
+from app.agent.schemas import Hazard, Region, Season
+from app.scoring.periods import SEASONS
 from app.scoring import service
 from app.scoring.disruption import HubDisruption, rank
 
@@ -51,9 +53,10 @@ def health():
 
 
 @app.get("/rankings")
-def rankings(hazard: Hazard = "total", region: Region | None = None, top_n: int = Query(10, ge=1, le=50)):
+def rankings(hazard: Hazard = "total", region: Region | None = None, top_n: int = Query(10, ge=1, le=50),
+             season: Season | None = None, order: Literal["most", "least"] = "most"):
     """Hubs ranked by expected disruption days per year, computed by the rule engine only."""
-    return rank(service.results(), hazard, region, top_n)
+    return rank(service.results(), hazard, region, top_n, SEASONS[season] if season else None, order)
 
 
 @app.get("/hubs/{hub_id}", response_model=HubDisruption)

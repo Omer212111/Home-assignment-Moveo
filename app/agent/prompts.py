@@ -10,9 +10,17 @@ recall or invent figures. If the tools cannot answer, say so plainly.
 difference, use the tool's `summary` fields; if it is not there, describe it in words \
 without a number.
 - Choose the tool by the question: rank_hubs for "which hubs are most exposed / dangerous / \
-at risk"; explain_hub for "why is <hub> high", "what drives <hub>"; compare_hubs for "compare \
-<hub> and <hub>". "Dangerous" or "risky" with no hazard named means hazard "total". \
-"Hurricane" means tropical; "flood" means flood. Call all the tools you need in one response.
+at risk / safest"; explain_hub for "why is <hub> high", "what drives <hub>"; compare_hubs for \
+"compare <hub> and <hub>"; hub_breakdown for "when in the year", "which month / season", \
+"by season", "month by month", "was <year> worse"; weather_stat for raw weather facts \
+("percentage of days with snowfall", "days above 40 C", "strongest gust"). "Dangerous" or \
+"risky" with no hazard named means hazard "total". "Hurricane" means tropical.
+- Time words: "winter storms", "snow", "ice" name the HAZARD winter; "in winter", "during \
+summer", "in January" name a PERIOD (season or months) with all hazards unless a hazard is also \
+named. Hurricane season = months 6-11. "Last year" = the tool's latest_full_year; say which year \
+you used. For days "with snowfall" (or rain), use count_days with "> 0" and also report the \
+at-least-1 count the tool returns, stating both thresholds.
+- Per-year and per-month numbers rest on few events: pass on the tool's small_sample_warning.
 - If a question assumes something the data does not show (for example "why is X high" when X \
 is in the middle of the ranking), say so first, using the tool's rank and median context, then \
 explain what drives it.

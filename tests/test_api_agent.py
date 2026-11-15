@@ -58,9 +58,9 @@ def test_answer_schema_is_strict():
 
 
 def test_run_tool_validates_arguments(api):
-    result, is_error = run_tool("rank_hubs", {"hazard": "volcano", "region": None, "top_n": 5})
+    result, is_error = run_tool("rank_hubs", {"hazard": "volcano", "region": None, "top_n": 5, "order": "most", "season": None, "months": None})
     assert is_error and result["error"] == "invalid arguments"
-    result, is_error = run_tool("rank_hubs", {"hazard": "total", "region": None, "top_n": 3})
+    result, is_error = run_tool("rank_hubs", {"hazard": "total", "region": None, "top_n": 3, "order": "most", "season": None, "months": None})
     assert not is_error and [r["rank"] for r in result["ranking"]] == [1, 2, 3]
     assert "method" in result
 
@@ -98,7 +98,7 @@ class FakeClient:
 
 def test_loop_runs_tool_then_returns_validated_answer(api, monkeypatch):
     fake = FakeClient([
-        _msg("tool_use", _tool_use("rank_hubs", {"hazard": "total", "region": None, "top_n": 3})),
+        _msg("tool_use", _tool_use("rank_hubs", {"hazard": "total", "region": None, "top_n": 3, "order": "most", "season": None, "months": None})),
         _msg("end_turn", _text(_answer())),
     ])
     monkeypatch.setattr(loop, "client", lambda: fake)
@@ -166,7 +166,7 @@ def test_real_sdk_round_trip(api, monkeypatch):
     captured = []
     fake = _sdk_client([
         (200, _api_message("tool_use", [{"type": "tool_use", "id": "tu_1", "name": "rank_hubs",
-                                         "input": {"hazard": "total", "region": None, "top_n": 3}}])),
+                                         "input": {"hazard": "total", "region": None, "top_n": 3, "order": "most", "season": None, "months": None}}])),
         (200, _api_message("end_turn", [{"type": "text", "text": _answer()}])),
     ], captured)
     monkeypatch.setattr(loop, "client", lambda: fake)
@@ -202,7 +202,7 @@ def test_index_serves_chat_ui(api):
 
 
 def test_identical_tool_calls_are_served_from_cache(api, monkeypatch):
-    args = {"hazard": "total", "region": None, "top_n": 10}
+    args = {"hazard": "total", "region": None, "top_n": 10, "order": "most", "season": None, "months": None}
     fake = FakeClient([
         _msg("tool_use", _tool_use("rank_hubs", args, "a"), _tool_use("rank_hubs", dict(args), "b")),
         _msg("end_turn", _text(_answer())),
@@ -224,7 +224,7 @@ def test_trajectory_records_thinking_tools_and_answer(api, monkeypatch):
     from app.agent import trajectory
     thinking = SimpleNamespace(type="thinking", thinking="The user asks for the riskiest hubs; use rank_hubs.")
     fake = FakeClient([
-        _msg("tool_use", thinking, _tool_use("rank_hubs", {"hazard": "total", "region": None, "top_n": 3})),
+        _msg("tool_use", thinking, _tool_use("rank_hubs", {"hazard": "total", "region": None, "top_n": 3, "order": "most", "season": None, "months": None})),
         _msg("end_turn", _text(_answer())),
     ])
     monkeypatch.setattr(loop, "client", lambda: fake)
@@ -253,7 +253,7 @@ def test_chat_returns_and_saves_trajectory(api, monkeypatch):
 def test_repeated_calls_force_an_answer_and_failures_keep_their_trajectory(api, monkeypatch):
     """Eval run 4: the model repeated identical calls until MAX_STEPS. After a round of only
     repeated calls the next call disables tools (tool_choice none), so the model must answer."""
-    args = {"hazard": "winter", "region": "Midwest", "top_n": 3}
+    args = {"hazard": "winter", "region": "Midwest", "top_n": 3, "order": "most", "season": None, "months": None}
     fake = FakeClient([
         _msg("tool_use", _tool_use("rank_hubs", args, "a")),
         _msg("tool_use", _tool_use("rank_hubs", dict(args), "b")),   # repeat -> served from cache

@@ -62,3 +62,55 @@ cases:
         expect: {tool: explain_hub, args: {hub_id: dallas}, ranking: null, mentions: ["17"]}
       - question: How does it compare with Fort Worth?
         expect: {tool: compare_hubs, args: {hub_ids: [dallas, fort_worth]}, ranking: null}
+
+  # ---- Time dimension (docs/QUESTION_CATALOG.md): seasons, months, years, raw weather -------------
+
+  - id: season_not_hazard
+    why: '"in summer" is a PERIOD (all hazards, Jun-Aug), not a hazard.'
+    turns:
+      - question: Which hubs are most disrupted in summer?
+        expect: {tool: rank_hubs, args: {hazard: total, season: summer, months: null}, ranking: present}
+
+  - id: winter_hazard_not_season
+    why: '"winter storms" is the HAZARD winter for the whole year, not the season Dec-Feb.'
+    turns:
+      - question: Which hubs have the worst winter storms?
+        expect: {tool: rank_hubs, args: {hazard: winter, season: null, months: null}, ranking: present}
+
+  - id: safest_hubs
+    why: Least exposed first ("safest"), not the usual most-exposed ranking.
+    turns:
+      - question: Which 5 hubs are the safest?
+        expect: {tool: rank_hubs, args: {hazard: total, order: least, top_n: 5}, ranking: present}
+
+  - id: worst_month
+    why: Seasonality of one hub. Denver's worst month is March (spring snow), not January.
+    turns:
+      - question: In which month is the Denver hub most disrupted?
+        expect: {tool: hub_breakdown, args: {hub_ids: [denver], by: month}, ranking: null, mentions: [Mar]}
+
+  - id: compare_by_season
+    why: Two hubs compared season by season (the per-period comparison, not one annual number).
+    turns:
+      - question: Compare Boston and Minneapolis by season.
+        expect: {tool: hub_breakdown, args: {hub_ids: [boston, minneapolis], by: season}, ranking: null}
+
+  - id: year_comparison
+    why: Per-year actual days; the answer must not present one year as a trend (small sample).
+    turns:
+      - question: Was 2024 a worse year than 2021 for the Denver hub?
+        expect: {tool: hub_breakdown, args: {hub_ids: [denver], by: year}, ranking: null, mentions: ["2024", "2021"]}
+
+  - id: snowfall_percentage
+    why: Assignment example question. "Last year" = 2025 (latest full year); "had snowfall" = more
+      than 0 cm, with the at-least-1-cm count stated as well (11.8% vs 4.7% of days).
+    turns:
+      - question: What percentage of days in Denver last year had snowfall?
+        expect: {tool: weather_stat, args: {hub_ids: [denver], variable: snowfall_cm, statistic: count_days, year: 2025},
+                 ranking: null, mentions: ["2025", "11.8"]}
+
+  - id: hurricane_season_comparison
+    why: A comparison restricted to months (hurricane season = June-November).
+    turns:
+      - question: Is Houston riskier than Miami during hurricane season?
+        expect: {tool: compare_hubs, args: {hub_ids: [houston, miami], months: [6, 7, 8, 9, 10, 11]}, ranking: null}

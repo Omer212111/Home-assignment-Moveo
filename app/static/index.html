@@ -117,6 +117,8 @@
       <button type="button">Which 3 Midwest hubs are most exposed to winter disruption?</button>
       <button type="button">Compare Miami and Houston in terms of hurricane and flood exposure.</button>
       <button type="button">Why is the Dallas hub's weather disruption risk high?</button>
+      <button type="button">What percentage of days in Denver last year had snowfall?</button>
+      <button type="button">Compare Boston and Minneapolis by season.</button>
     </div>
     <form id="form">
       <textarea id="input" placeholder="Ask about hub weather risk..." rows="1" aria-label="Your question"></textarea>
@@ -180,7 +182,10 @@ function renderDetails(res) {
   html += `<div>Confidence: <span class="badge ${esc(a.confidence)}">${esc(a.confidence)}</span></div>`;
   if (a.ranking && a.ranking.length) {
     const max = Math.max(...a.ranking.map(r => r.days_per_year), 0.01);
-    html += "<h3>Ranking - expected disruption days / year</h3><table class='rank'><thead><tr>"
+    const rc = (res.tool_calls || []).filter(c => c.name === "rank_hubs" && !c.is_error).pop();
+    const per = rc && rc.result.period && rc.result.period !== "whole year" ? ` (${esc(rc.result.period)})` : "";
+    html += `<h3>Ranking - expected disruption days / year${per}</h3>`
+         + "<table class='rank'><thead><tr>"
          + "<th>#</th><th>Hub</th><th class='num'>Days/yr</th><th class='barcell'></th><th>Main hazard</th></tr></thead><tbody>"
          + a.ranking.map(r => `<tr><td>${r.rank}</td><td>${esc(r.city)}</td>`
            + `<td class="num">${r.days_per_year.toFixed(2)}</td>`
@@ -199,7 +204,8 @@ function renderDetails(res) {
     if (!hubs || !hubs.length) continue;
     const hz = Object.keys(hubs[0].hazards);
     const ranked = c.name === "compare_hubs" ? c.result.hubs_ranked : c.result.context.hubs_ranked;
-    html += `<h3>${c.name === "compare_hubs" ? "Comparison" : "Hub profile"} - days / year (rank of ${ranked})</h3>`
+    const per2 = c.result.period && c.result.period !== "whole year" ? `, ${esc(c.result.period)}` : "";
+    html += `<h3>${c.name === "compare_hubs" ? "Comparison" : "Hub profile"} - days / year (rank of ${ranked}${per2})</h3>`
          + "<table class='rank'><thead><tr><th>Hazard</th>"
          + hubs.map(h => `<th class="num">${esc(h.hub.city)}</th>`).join("") + "</tr></thead><tbody>"
          + hz.map(k => `<tr><td>${esc(hubs[0].hazards[k].label)}</td>` + hubs.map(h => {
@@ -208,6 +214,31 @@ function renderDetails(res) {
            }).join("") + "</tr>").join("")
          + "<tr><td><b>All hazards</b></td>" + hubs.map(h => `<td class="num"><b>${h.total_days_per_year.toFixed(2)}</b>`
            + ` <span class="meta">#${h.overall_rank ?? "-"}</span></td>`).join("") + "</tr></tbody></table>";
+  }
+  // hub_breakdown: periods x hubs; weather_stat: one row per hub. Built from the tool result, never the text.
+  for (const c of calls0) {
+    if (c.name === "hub_breakdown") {
+      const r = c.result, hubs = r.hubs, key = r.by === "year" ? "days" : "days_per_year";
+      html += `<h3>By ${esc(r.by)} - ${r.by === "year" ? "actual days in the year" : "days / year in the period"}</h3>`
+           + "<table class='rank'><thead><tr><th>" + esc(r.by) + "</th>"
+           + hubs.map(h => `<th class="num">${esc(h.hub.city)}</th>`).join("") + "</tr></thead><tbody>"
+           + hubs[0].periods.map((p, j) => `<tr><td>${esc(String(p.period))}</td>` + hubs.map(h => {
+               const v = h.periods[j], peak = String(h.highest_period) === String(v.period);
+               return `<td class="num">${peak ? "<b>" : ""}${v[key].toFixed(2)}${peak ? "</b>" : ""}</td>`;
+             }).join("") + "</tr>").join("") + "</tbody></table>"
+           + `<p class="meta">${esc(r.small_sample_warning)}</p>`;
+    }
+    if (c.name === "weather_stat") {
+      const r = c.result, count = r.statistic === "count_days";
+      html += `<h3>Weather: ${esc(r.variable)} - ${esc(r.period)}</h3><table class='rank'><thead><tr><th>Hub</th>`
+           + (count ? "<th class='num'>Days</th><th class='num'>% of days</th>" : `<th class='num'>${esc(r.statistic)}</th>`)
+           + "<th>Dates</th></tr></thead><tbody>"
+           + r.hubs.map(h => `<tr><td>${esc(h.hub.city)}</td>` + (count
+               ? `<td class="num">${h.days_matching} / ${h.days_in_period}</td><td class="num">${h.percentage_of_days}%</td>`
+               : `<td class="num">${h.value ?? "-"}${h.on_date ? ` <span class="meta">${esc(h.on_date)}</span>` : ""}</td>`)
+             + `<td>${esc(h.date_range || "")}</td></tr>`).join("") + "</tbody></table>"
+           + (count ? `<p class="meta">Condition: ${esc(r.hubs[0].condition)}</p>` : "");
+    }
   }
   const list = (title, items) => items && items.length
     ? `<h3>${title}</h3><ul>${items.map(x => `<li>${esc(x)}</li>`).join("")}</ul>` : "";

@@ -18,7 +18,7 @@ Build a "Weather Risk Intelligence Agent" for a US logistics company that ranks 
 Example questions the agent should answer:
 1. Which hubs in the Midwest are most exposed to winter disruption? (**done**)
 2. Compare Miami and Houston in terms of hurricane and flood exposure. (**done, slice 3**)
-3. What percentage of days in Denver last year had snowfall? (not yet)
+3. What percentage of days in Denver last year had snowfall? (**done, `weather_stat`**)
 4. Why is the Dallas hub's weather disruption risk high? (**done, slice 3**)
 
 Work started around 13:30 UTC on 2026-11-15; about 4 hours used so far.
@@ -51,8 +51,8 @@ Work started around 13:30 UTC on 2026-11-15; about 4 hours used so far.
 | API | `app/main.py` | `GET /` (UI), `/health`, `/rankings`, `/hubs/{id}`, `POST /chat` |
 | Agent | `app/agent/{schemas,tools,prompts,loop}.py` | `claude-sonnet-5-5`, effort low, refusal fallbacks; hand-written tool loop; tools `rank_hubs`, `explain_hub`, `compare_hubs` (slice 3, `DESIGN_DECISIONS.md` section 11); `ModelAnswer` = LLM output schema (no ranking), `AgentAnswer` = API response (server attaches the ranking from the engine); per-question cache for identical tool calls; tool schemas via `anthropic.transform_schema` (strict mode rejects min/max) |
 | UI | `app/static/index.html` | single page, no libraries, chat + details panel |
-| Tests | `tests/` | 45 offline tests (`uv run pytest -q`) |
-| Evals | `evals/cases.yaml`, `evals/checks.py`, `evals/run.py` | 7 cases / 9 turns; `uv run python -m evals.run` (~$0.16-0.20 per run, laptop only) |
+| Tests | `tests/` | 54 offline tests (`uv run pytest -q`) |
+| Evals | `evals/cases.yaml`, `evals/checks.py`, `evals/run.py` | 15 cases / 17 turns; `uv run python -m evals.run` (~$0.16-0.20 per run, laptop only) |
 
 Current top of the ranking: Boston 13.1, Minneapolis 11.7, Denver 10.3, Milwaukee 10.3, Chicago 9.6 (winter-driven). Virginia Beach (#6) is inflated by coastal wind, a documented limitation.
 
@@ -78,7 +78,7 @@ Agent trajectories (thinking summaries, tool calls): "Agent steps" switch in the
 ## 7. Next steps (in order; stop for review after each)
 1. ~~Analyse eval run 3~~ (done; fixes A-E deferred to `docs/IMPROVEMENTS.md` section 8 by the user's choice).
 2. **Slice 3 (built, eval run 4 pending on the laptop): `compare_hubs` and `explain_hub` tools** for "Compare Miami and Houston (hurricane + flood)" and "Why is Dallas high?". `explain_hub` can use `/hubs/{id}` data: per-hazard days, drivers, counted FEMA disasters. Add eval cases.
-3. **Slice 4: `weather_stat` tool** for "% of days in Denver last year with snowfall" ("last year" = 2025, inside the stored window; state the date range and the >= threshold used). Add eval cases.
+3. **Done (time-dimension slice, eval run 6 pending): `weather_stat`, `hub_breakdown`, `period` on rank/compare** (`docs/QUESTION_CATALOG.md`). Original note: **Slice 4: `weather_stat` tool** for "% of days in Denver last year with snowfall" ("last year" = 2025, inside the stored window; state the date range and the >= threshold used). Add eval cases.
 4. **README rewrite**: run instructions (Windows + macOS/Linux), assumptions and limitations, repository structure, data storage choice (the required design-doc items).
 5. **Deploy to Render**: Dockerfile; `ANTHROPIC_API_KEY` as a Render env var; the DB is rebuilt from the snapshot at startup.
 6. Bonus, only if time allows: voice (Web Speech API in the page); alerts (NWS + scheduler + webhook).

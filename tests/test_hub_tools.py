@@ -34,7 +34,7 @@ def test_explain_hub_rejects_unknown_hub():
 
 
 def test_compare_hubs_selected_hazards_with_precomputed_differences():
-    res, err = run_tool("compare_hubs", {"hub_ids": ["miami", "houston"], "hazards": ["tropical", "flood"]})
+    res, err = run_tool("compare_hubs", {"hub_ids": ["miami", "houston"], "hazards": ["tropical", "flood"], "season": None, "months": None})
     assert not err
     assert [h["hub"]["hub_id"] for h in res["hubs"]] == ["miami", "houston"]
     assert set(res["hubs"][0]["hazards"]) == {"tropical", "flood"}
@@ -49,10 +49,10 @@ def test_compare_hubs_selected_hazards_with_precomputed_differences():
 
 
 def test_compare_hubs_all_hazards_and_limits():
-    res, err = run_tool("compare_hubs", {"hub_ids": ["dallas", "fort_worth"], "hazards": None})
+    res, err = run_tool("compare_hubs", {"hub_ids": ["dallas", "fort_worth"], "hazards": None, "season": None, "months": None})
     assert not err and len(res["hubs"][0]["hazards"]) == 6
     assert "selected_hazards_combined" not in res["comparison"]
-    _, err = run_tool("compare_hubs", {"hub_ids": ["dallas"], "hazards": None})
+    _, err = run_tool("compare_hubs", {"hub_ids": ["dallas"], "hazards": None, "season": None, "months": None})
     assert err  # at least 2 hubs
 
 
@@ -70,4 +70,4 @@ def test_eval_cases_file_parses():
     import yaml
     from evals.run import check_turn  # noqa: F401  (the runner imports cleanly)
     cases = yaml.safe_load((Path(__file__).parent.parent / "evals" / "cases.yaml").read_text(encoding="utf-8"))["cases"]
-    assert len(cases) == 7 and all(c["turns"] and "why" in c for c in cases)
+    assert len(cases) == 15 and all(c["turns"] and "why" in c for c in cases)

@@ -15,7 +15,7 @@ def scores():
 
 
 def make_result(text, ranking_rows=None, args=None, notes="ok"):
-    args = args or {"hazard": "total", "region": None, "top_n": 10}
+    args = args or {"hazard": "total", "region": None, "top_n": 10, "order": "most", "season": None, "months": None}
     tool_result = rank_hubs(RankHubsInput.model_validate(args))
     rows = tool_result["ranking"] if ranking_rows is None else ranking_rows
     answer = AgentAnswer(answer_markdown=text, assumptions=[], confidence="medium", uncertainty_notes=notes,
@@ -51,6 +51,6 @@ def test_ranking_must_equal_engine():
 
 
 def test_args_mismatch():
-    r = make_result("x", args={"hazard": "winter", "region": "Midwest", "top_n": 3})
-    assert args_mismatch(r, {"hazard": "winter", "region": "Midwest", "top_n": 3}) is None
+    r = make_result("x", args={"hazard": "winter", "region": "Midwest", "top_n": 3, "order": "most", "season": None, "months": None})
+    assert args_mismatch(r, {"hazard": "winter", "region": "Midwest", "top_n": 3, "order": "most", "season": None, "months": None}) is None
     assert "top_n" in args_mismatch(r, {"top_n": 5})

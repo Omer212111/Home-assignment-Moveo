@@ -5,42 +5,45 @@ investment will ask many variations of them. This catalog groups the likely ques
 *dimension* they need (which hubs, which hazard, which time period, what statistic), marks what the
 agent can answer today, and proposes the smallest set of tools that covers the rest.
 
-Status: ✅ answered today · 🟡 partly · ❌ not yet
+Status (updated after the time-dimension slice): ✅ answered · 🟡 partly · ❌ not yet.
+The ❌ rows marked *(built)* below are now implemented: `period` on `rank_hubs` / `compare_hubs`,
+`order` on `rank_hubs`, and the new `hub_breakdown` and `weather_stat` tools (`DESIGN_DECISIONS.md` section 14).
+Still open: region totals, threshold counts, worst single event, a method tool.
 
 ## 1. Rankings (which hubs?)
 | Example | Status | Tool |
 |---|---|---|
 | What are the 10 most dangerous hubs? | ✅ | `rank_hubs` |
 | Which Midwest hubs are most exposed to winter disruption? *(assignment)* | ✅ | `rank_hubs` |
-| Which are the 5 safest hubs? | ❌ | `rank_hubs` needs an `order` (most / least exposed) |
+| Which are the 5 safest hubs? | ✅ *(built)* | `rank_hubs` needs an `order` (most / least exposed) |
 | Which region is the riskiest overall? | ❌ | region totals (new `summary` in `rank_hubs` or a small tool) |
 | How many hubs lose more than 8 days a year? | 🟡 | ranking + a threshold count (pre-computed) |
-| Which hubs are most disrupted **in summer** / **in January**? | ❌ | `rank_hubs` with a **period** filter |
+| Which hubs are most disrupted **in summer** / **in January**? | ✅ *(built)* | `rank_hubs` with a **period** filter |
 
 ## 2. One hub (why? what drives it?)
 | Example | Status | Tool |
 |---|---|---|
 | Why is the Dallas hub's weather disruption risk high? *(assignment)* | ✅ | `explain_hub` (corrects the premise: rank 17 of 50) |
 | What are the main hazards for Denver? | ✅ | `explain_hub` |
-| **When in the year** is Chicago most disrupted? Which month is worst? | ❌ | new: per-month / per-season breakdown |
-| Was 2024 worse than 2021 for Denver? Which year was worst? | ❌ | new: per-year breakdown |
+| **When in the year** is Chicago most disrupted? Which month is worst? | ✅ *(built)* | new: per-month / per-season breakdown |
+| Was 2024 worse than 2021 for Denver? Which year was worst? | ✅ *(built)* | new: per-year breakdown |
 | What was the worst single event in Dallas? | ❌ | events list (tail risk, `IMPROVEMENTS.md` section 2) |
 
 ## 3. Comparisons (X vs Y)
 | Example | Status | Tool |
 |---|---|---|
 | Compare Miami and Houston in terms of hurricane and flood exposure. *(assignment)* | ✅ | `compare_hubs` |
-| Compare Boston and Minneapolis **by season** / **month by month** | ❌ | new breakdown, for 2-5 hubs |
-| Is Houston riskier than Miami **during hurricane season**? | ❌ | breakdown restricted to months (Jun-Nov) |
+| Compare Boston and Minneapolis **by season** / **month by month** | ✅ *(built)* | new breakdown, for 2-5 hubs |
+| Is Houston riskier than Miami **during hurricane season**? | ✅ *(built)* | breakdown restricted to months (Jun-Nov) |
 | Compare Midwest and South | ❌ | region totals |
 
 ## 4. Weather statistics (raw data, not disruption days)
 | Example | Status | Tool |
 |---|---|---|
-| What percentage of days in Denver last year had snowfall? *(assignment)* | ❌ | new `weather_stat` |
-| How many days above 40 C did Phoenix have in 2024? | ❌ | `weather_stat` |
-| Total snowfall in Chicago in January 2024? Strongest gust in Boston? | ❌ | `weather_stat` (count / percentage / sum / max) |
-| Which month gets the most snow in Denver? | ❌ | `weather_stat` by month |
+| What percentage of days in Denver last year had snowfall? *(assignment)* | ✅ *(built)* | new `weather_stat` |
+| How many days above 40 C did Phoenix have in 2024? | ✅ *(built)* | `weather_stat` |
+| Total snowfall in Chicago in January 2024? Strongest gust in Boston? | ✅ *(built)* | `weather_stat` (count / percentage / sum / max) |
+| Which month gets the most snow in Denver? | ✅ *(built)* | `weather_stat` by month |
 
 ## 5. Method and confidence
 | Example | Status | Tool |

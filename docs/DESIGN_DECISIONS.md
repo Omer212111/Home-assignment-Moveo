@@ -267,3 +267,47 @@ rejected by Sonnet 5.5; `none` is supported.)
 tools in sequence (rank, then explain the top hub). Only *repeats* trigger the guardrail.
 **Why keep the tools in the request?** Removing them would change the request prefix and defeat
 prompt caching; `tool_choice` leaves the prefix unchanged.
+
+---
+
+## 14. The time dimension: months, seasons, years, raw weather (`app/scoring/periods.py`)
+
+Driven by `docs/QUESTION_CATALOG.md`: analysts ask *when* (which month, which season, which year),
+not only "how many days per year".
+
+**Decision 1: compute breakdowns from the same records as the annual total.**
+The engine already built a per-day disruption list and then threw it away. It now keeps it
+(`HubDisruption.records`, excluded from the API response): weather days with their severity, and
+each counted FEMA disaster placed on its incident start date. Every breakdown sums these records,
+so the 12 months and the 4 seasons add up to the annual total, for every hub and hazard (a test
+checks all 50 x 7). A separate monthly model would have drifted from the annual number.
+
+**Decision 2: two kinds of time numbers, labelled differently.**
+- By month / season: *expected days per year in that period* (weather averaged over 5 years,
+  disasters over 20), so they add up to the KPI.
+- By year: *actual days in that calendar year* (disasters at their full days). This answers "was
+  2024 worse than 2021?"; every result carries a small-sample warning, because 5 years show
+  variability, not a trend (Denver ranges from 5.8 to 14.5 days).
+
+**Decision 3: one `period` contract for every tool** (`season` or `months`, never both; validated).
+Meteorological seasons (winter = Dec-Feb), stated in every result that uses them. Hurricane
+season is expressed as months 6-11 rather than a fifth "season", so seasons stay a partition of
+the year.
+
+**Decision 4: "winter" the hazard vs "winter" the season.** The schema descriptions and the prompt
+spell out the difference ("winter storms" = hazard; "in winter" = period), and two eval cases
+test exactly that pair.
+
+**Decision 5: `weather_stat` reports raw weather, not disruption.** "What percentage of days had
+snowfall" is a weather fact, so it reads the daily data directly and returns the exact condition,
+date range and number of days used. For "days with snowfall" it returns both > 0 cm (43 days,
+11.8% in Denver 2025) and >= 1 cm (17 days, 4.7%), because the definition changes the answer by a
+factor of 2.5 and trace amounts are reanalysis noise. "Last year" = `latest_full_year` (2025).
+
+**Decision 6: tool count.** Five tools, each named after a question type (rank, explain, compare,
+breakdown, weather). Adding `period` to the existing tools instead of new "seasonal_rank" /
+"seasonal_compare" tools keeps the choice simple for the model.
+
+Also found while testing: an invalid-argument error from a model validator contained a Python
+exception object, which would have crashed the loop when sent back to the model; errors are now
+returned without that context.

@@ -4,7 +4,7 @@
     uv run python -m evals.run --case out_of_scope
 
 Prints a pass/fail table and writes evals/report.json. Exit code 1 if any check fails.
-Cost: roughly $0.03 per turn with claude-sonnet-5-5 (9 turns ~ $0.30).
+Cost: roughly $0.03 per turn with claude-sonnet-5-5 (17 turns ~ $0.50).
 """
 import argparse
 import json
