@@ -82,6 +82,8 @@ def main(argv=None):
                 result = ask(q, history)
             except AgentError as exc:
                 print(f"  turn {i}: FAIL  agent error: {exc}")
+                path = trajectory.save(q, case["id"], None, HERE / "trajectories", f"{case['id']}_turn{i}", error=exc)
+                print(f"      trajectory of the failure: {path}")
                 entry["error"] = str(exc)
                 report.append(entry)
                 n_checks += 1

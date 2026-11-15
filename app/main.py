@@ -98,6 +98,10 @@ def chat(req: ChatRequest):
         result = ask(req.message, _history(session_id))
     except AgentError as exc:
         log.warning("agent error: %s", exc)
+        try:
+            log.warning("trajectory of the failure: %s", trajectory.save(req.message, session_id, None, error=exc))
+        except OSError:
+            pass
         raise HTTPException(502, str(exc)) from exc
     except Exception as exc:  # unexpected: full traceback in the server log, short message to the client
         log.exception("unexpected error in /chat")

@@ -57,15 +57,23 @@ def result_summary(name: str, result: dict, is_error: bool) -> str:
     return f"{len(json.dumps(result))} characters"
 
 
-def save(question: str, session_id: str, result, directory: Path | None = None, name: str | None = None) -> Path:
+def save(question: str, session_id: str, result=None, directory: Path | None = None, name: str | None = None,
+         error: Exception | None = None) -> Path:
+    """Save a trajectory: from an AgentResult, or from an AgentError (the steps up to the failure)."""
     directory = directory or settings.trajectory_dir
     directory.mkdir(parents=True, exist_ok=True)
     now = datetime.now(timezone.utc)
     path = directory / f"{name or now.strftime('%Y%m%dT%H%M%S') + '_' + session_id[:8]}.json"
+    events = result.trajectory if result is not None else getattr(error, "trajectory", [])
+    calls = [e for e in events if e["type"] == "model_call"]
     path.write_text(json.dumps({
         "saved_at": now.isoformat(timespec="seconds"), "session_id": session_id, "question": question,
-        "model": result.model, "steps": result.steps, "tokens": [result.input_tokens, result.output_tokens],
-        "trajectory": result.trajectory, "answer": result.answer.model_dump(),
+        "model": result.model if result is not None else (calls[-1]["model"] if calls else None),
+        "steps": len(calls),
+        "tokens": [sum(e["input_tokens"] for e in calls), sum(e["output_tokens"] for e in calls)],
+        "trajectory": events,
+        "answer": result.answer.model_dump() if result is not None else None,
+        "error": str(error) if error is not None else None,
     }, indent=2, default=str), encoding="utf-8")
     return path
 
@@ -77,7 +85,8 @@ def render(data: dict) -> str:
     for e in data["trajectory"]:
         if e["type"] == "model_call":
             out.append(f"[model call {e['step']}] {e['duration_ms']} ms, {e['input_tokens']}+{e['output_tokens']} "
-                       f"tokens, stop: {e['stop_reason']}")
+                       f"tokens, stop: {e['stop_reason']}"
+                       + (f"  (tools disabled: {e['tools_disabled']})" if e.get("tools_disabled") else ""))
             for b in e["blocks"]:
                 if b["type"] == "thinking":
                     out += ["   thinks: " + line for line in b["text"].splitlines() if line.strip()]
@@ -94,7 +103,10 @@ def render(data: dict) -> str:
             out.append(f"   !! answer did not match the schema, asked again: {e['error'][:200]}")
         elif e["type"] == "final_answer":
             out.append(f"[answer] confidence {e['confidence']}")
-    out += ["", data["answer"]["answer_markdown"]]
+    if data.get("error"):
+        out += ["", f"FAILED: {data['error']}"]
+    if data.get("answer"):
+        out += ["", data["answer"]["answer_markdown"]]
     return "\n".join(out)
 
 

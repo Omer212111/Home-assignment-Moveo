@@ -67,3 +67,32 @@ Findings:
    rule; only the `tool arguments` check caught it.
 3. Fixes are listed in `docs/IMPROVEMENTS.md` section 8 (postponed in favour of the remaining
    chat-bot capabilities).
+
+## Run 4 (slice 3 + trajectories): 30/33 checks, 3 turns failed, ~$0.15
+
+Changes since run 3: `explain_hub` and `compare_hubs`, a longer prompt, and thinking requested with
+`display: "summarized"` (for trajectories). Result: a regression.
+
+| Case | Model calls | Result |
+|---|---|---|
+| baseline_top10 | 3 | 6/6, one repeated identical call (cached) |
+| region_hazard_small_n | 4 | 6/6, **two** repeated identical calls |
+| impossible_n | 6 | **no answer** ("No final answer after 6 model calls") |
+| out_of_scope | 1 | 6/6 |
+| follow_up_context | 2 + 2 | 12/12 |
+| compare_hurricane_flood | 6 | **no answer** |
+| explain_premise | 6 | **no answer** (turn 2 not run) |
+
+Finding: repeated tool calls went from occasional (runs 2-3) to a loop that uses up all 6 model
+calls. The failed turns raised an error before a trajectory was saved, so their steps were lost.
+
+Changes:
+1. **Guardrail in the loop (deterministic):** after a round in which every call repeated an
+   earlier one, and on the last allowed model call, the next request sets `tool_choice: none`. The
+   tools stay defined (cached prefix unchanged), but the model must answer from the results it has.
+   Chains of *different* calls remain possible, so slice-3 questions that need two tools still work.
+2. Failures now keep their trajectory (`AgentError.trajectory`); the eval runner and `/chat` save it.
+3. The cached-call note now tells the model to use the earlier result and answer.
+
+Open question for run 5: whether `display: "summarized"` made the repeats more frequent. If the
+trajectories show it, compare with `LLM_THINKING_DISPLAY=omitted`.

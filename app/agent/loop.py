@@ -40,7 +40,9 @@ class AgentResult(BaseModel):
 
 
 class AgentError(RuntimeError):
-    pass
+    def __init__(self, message: str, trajectory: list[dict] | None = None):
+        super().__init__(message)
+        self.trajectory = trajectory or []  # the steps up to the failure, so a failure can be read too
 
 
 _client: anthropic.Anthropic | None = None
@@ -61,10 +63,15 @@ def _final_text(content) -> str | None:
     return texts[-1] if texts else None
 
 
-def _call_model(messages: list) -> object:
-    """One Messages API call. API failures become AgentError with a readable message."""
+def _call_model(messages: list, tool_choice: dict | None = None) -> object:
+    """One Messages API call. API failures become AgentError with a readable message.
+
+    tool_choice {"type": "none"} keeps the tool definitions (so the cached prefix is unchanged) but
+    makes the model answer without calling a tool."""
+    extra = {"tool_choice": tool_choice} if tool_choice else {}
     try:
         return client().beta.messages.parse(
+            **extra,
             model=settings.llm_model,
             max_tokens=16000,
             system=SYSTEM_PROMPT,
@@ -98,17 +105,31 @@ def ask(question: str, history: list[dict] | None = None) -> AgentResult:
     """Answer one question. `history` is earlier turns as plain {role, content: str} messages."""
     messages = [*(history or []), {"role": "user", "content": question}]
     calls: list[ToolCall] = []
-    tokens_in = tokens_out = 0
-    retried_schema = False
     cache: dict[tuple[str, str], tuple[dict, bool]] = {}
     events: list[dict] = []
+    try:
+        return _run(messages, calls, cache, events)
+    except AgentError as exc:
+        exc.trajectory = events
+        raise
+
+
+def _run(messages: list, calls: list[ToolCall], cache: dict, events: list[dict]) -> AgentResult:
+    tokens_in = tokens_out = 0
+    retried_schema = False
+    force_answer = False  # set when the model only repeated earlier calls (eval runs 3-4)
 
     for step in range(1, MAX_STEPS + 1):
+        # Guardrail: on the last allowed call, or after a round of only repeated calls, the model
+        # must answer from the results it already has. Chains of *different* calls stay possible.
+        answer_now = force_answer or step == MAX_STEPS
         t_call = time.perf_counter()
-        response = _call_model(messages)
+        response = _call_model(messages, {"type": "none"} if answer_now else None)
         tokens_in += response.usage.input_tokens
         tokens_out += response.usage.output_tokens
         events.append(traj.model_call_event(step, response, int((time.perf_counter() - t_call) * 1000)))
+        if answer_now:
+            events[-1]["tools_disabled"] = "only repeated calls before" if force_answer else "last allowed call"
 
         if response.stop_reason == "refusal":
             raise AgentError("The model declined to answer this request.")
@@ -134,11 +155,13 @@ def ask(question: str, history: list[dict] | None = None) -> AgentResult:
                 events.append({"type": "tool_result", "step": step, "name": block.name, "input": block.input,
                                "cached": cached, "is_error": is_error, "duration_ms": calls[-1].duration_ms,
                                "summary": traj.result_summary(block.name, result, is_error)})
-                content = (json.dumps({"note": "identical call already answered above; same result"})
+                content = (json.dumps({"note": "identical call already answered above with the same result; "
+                                                    "use that result and write the final answer"})
                            if cached else json.dumps(result))
                 results.append({"type": "tool_result", "tool_use_id": block.id,
                                 "content": content, "is_error": is_error})
             messages.append({"role": "user", "content": results})  # all results in one message
+            force_answer = all(c.cached for c in calls if c.step == step)
             continue
 
         # Final answer: structured output should guarantee valid JSON; validate anyway.

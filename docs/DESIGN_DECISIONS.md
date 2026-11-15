@@ -253,3 +253,17 @@ under each answer: thinking summary, tool calls, results, retries. Off by defaul
 a clean chat and reviewers can turn the reasoning on. Found in browser testing: on a phone the
 example buttons left only 182 px for the conversation; they are now hidden on phones once the
 conversation has started.
+
+---
+
+## 13. Guardrail against repeated tool calls (after eval run 4)
+
+**Decision: rely on the prompt, or enforce in code?** Two prompt changes (runs 2 and 3) did not
+stop the model from repeating identical calls, and in run 4 it looped until `MAX_STEPS`. Enforced
+in code: after a round of only repeated calls, and on the last allowed call, the request sets
+`tool_choice: {"type": "none"}`, so the model can only answer. (Forcing a specific tool is
+rejected by Sonnet 5.5; `none` is supported.)
+**Why not disable tools after the first round?** That would block questions needing two different
+tools in sequence (rank, then explain the top hub). Only *repeats* trigger the guardrail.
+**Why keep the tools in the request?** Removing them would change the request prefix and defeat
+prompt caching; `tool_choice` leaves the prefix unchanged.

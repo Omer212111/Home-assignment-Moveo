@@ -248,3 +248,33 @@ def test_chat_returns_and_saves_trajectory(api, monkeypatch):
     body = api.post("/chat", json={"message": "hello"}).json()
     assert body["result"]["trajectory"][-1]["type"] == "final_answer"
     assert len(list(settings.trajectory_dir.glob("*.json"))) == 1
+
+
+def test_repeated_calls_force_an_answer_and_failures_keep_their_trajectory(api, monkeypatch):
+    """Eval run 4: the model repeated identical calls until MAX_STEPS. After a round of only
+    repeated calls the next call disables tools (tool_choice none), so the model must answer."""
+    args = {"hazard": "winter", "region": "Midwest", "top_n": 3}
+    fake = FakeClient([
+        _msg("tool_use", _tool_use("rank_hubs", args, "a")),
+        _msg("tool_use", _tool_use("rank_hubs", dict(args), "b")),   # repeat -> served from cache
+        _msg("end_turn", _text(_answer())),
+    ])
+    monkeypatch.setattr(loop, "client", lambda: fake)
+    res = loop.ask("Which 3 Midwest hubs are most exposed to winter disruption?")
+    assert res.steps == 3
+    assert "tool_choice" not in fake.requests[0] and "tool_choice" not in fake.requests[1]
+    assert fake.requests[2]["tool_choice"] == {"type": "none"}
+    assert res.trajectory[-2]["tools_disabled"] == "only repeated calls before"
+
+    # Different calls each round are allowed until the last call, which must answer.
+    fake = FakeClient([_msg("tool_use", _tool_use("rank_hubs", {**args, "top_n": n}, f"t{n}"))
+                       for n in range(1, loop.MAX_STEPS)] + [_msg("end_turn", _text("not json"))])
+    monkeypatch.setattr(loop, "client", lambda: fake)
+    with pytest.raises(loop.AgentError) as err:
+        loop.ask("x")
+    assert fake.requests[-1]["tool_choice"] == {"type": "none"}
+    assert [e["type"] for e in err.value.trajectory].count("model_call") == loop.MAX_STEPS
+
+    from app.agent import trajectory
+    text = trajectory.render(json.loads(trajectory.save("x", "s", None, error=err.value).read_text(encoding="utf-8")))
+    assert "FAILED:" in text and "tools disabled: last allowed call" in text
