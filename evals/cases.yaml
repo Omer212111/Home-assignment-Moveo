@@ -54,7 +54,7 @@ cases:
                  ranking: null, mentions: [Miami, Houston]}
 
   - id: explain_premise
-    why: Assignment example question with a premise the data only partly supports (Dallas is #17
+    why: Assignment example question with a premise the data only partly supports (Dallas is rank 17
       of 50, above the median but not near the top). The agent should say where Dallas stands,
       then explain; a follow-up switches to a comparison with a neighbouring hub.
     turns:

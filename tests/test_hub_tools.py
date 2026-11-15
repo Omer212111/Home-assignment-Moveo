@@ -62,3 +62,12 @@ def test_eval_args_check_treats_lists_as_sets():
     result = SimpleNamespace(tool_calls=[call])
     assert args_mismatch(result, {"hub_ids": ["miami", "houston"], "hazards": ["tropical", "flood"]}, "compare_hubs") is None
     assert args_mismatch(result, {"hub_ids": ["miami", "dallas"]}, "compare_hubs")
+
+
+def test_eval_cases_file_parses():
+    # Eval run 4 crashed on a YAML comment (" #17" inside a plain string); catch that offline.
+    from pathlib import Path
+    import yaml
+    from evals.run import check_turn  # noqa: F401  (the runner imports cleanly)
+    cases = yaml.safe_load((Path(__file__).parent.parent / "evals" / "cases.yaml").read_text(encoding="utf-8"))["cases"]
+    assert len(cases) == 7 and all(c["turns"] and "why" in c for c in cases)
