@@ -310,8 +310,9 @@ Diagrams and component table: `docs/ARCHITECTURE.md`.
 
 All tables and how they connect: `docs/DATA_MODEL.md` (entity-relationship diagram).
 
-Scale-out path: Postgres instead of SQLite for several app instances; Redis also for shared chat
-sessions and live data with a short expiry (e.g. NWS alerts).
+Scale-out path: the target data model in `docs/DATA_MODEL_SCALABLE.md` (Postgres with partitioned
+weather per location, versioned rule sets and scoring runs, persisted disruption days and monthly
+scores, raw responses in object storage, Redis as the read cache).
 
 ---
 
@@ -390,6 +391,7 @@ dollars, tail risk, FEMA National Risk Index, uncertainty ranges) are in `docs/I
 |---|---|
 | `docs/ARCHITECTURE.md` | Component diagram, chat sequence, component table |
 | `docs/DATA_MODEL.md` | Entity-relationship diagram of every table (Redis cache, SQLite, in-memory) |
+| `docs/DATA_MODEL_SCALABLE.md` | Target data model for scale: Postgres, versioned rules and scoring runs, incremental pipeline, migration path |
 | `docs/DESIGN_DECISIONS.md` | Every design decision with the options considered and why (API, agent, UI, tools, guardrails, caching, Redis) |
 | `docs/QUESTION_CATALOG.md` | The questions an analyst will ask, and which tool answers each |
 | `docs/EVALS.md` | Eval cases and the analysis of every run |

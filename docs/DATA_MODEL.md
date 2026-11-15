@@ -94,3 +94,6 @@ flowchart LR
 - **Not shown:** `hub_scores` exists in the schema but is no longer written (scores moved to memory);
   it is the natural place to store score history for the planned risk-change alerts.
   Chat trajectories are JSON files (`data/trajectories/`), not a table.
+
+
+For the design at scale (thousands of hubs, decades of data, versioned rules), see `docs/DATA_MODEL_SCALABLE.md`.
