@@ -77,7 +77,10 @@ def wrong_count_claims(result: AgentResult) -> list[str]:
 
 
 def ranking_mismatch(result: AgentResult) -> str | None:
-    """The answer's ranking must equal the deterministic ranking for the arguments the model used."""
+    """The answer's ranking must equal the deterministic ranking for the arguments the model used.
+
+    Since the server attaches the ranking from the engine (the model no longer types it), this is
+    a regression check on that wiring rather than on the model."""
     rank_calls = [c for c in result.tool_calls if c.name == "rank_hubs" and not c.is_error]
     if result.answer.ranking is None:
         return None if not rank_calls else "tool was called but answer.ranking is null"

@@ -37,12 +37,19 @@ class RankedHub(BaseModel):
     main_hazard: str = Field(description="hazard contributing the most disruption days")
 
 
-class AgentAnswer(BaseModel):
+class ModelAnswer(BaseModel):
+    """What the LLM writes (the structured-output schema): the explanation, never the data."""
     model_config = ConfigDict(extra="forbid")
     answer_markdown: str = Field(description="the answer for the analyst, in Markdown")
-    ranking: list[RankedHub] | None = Field(
-        description="the ranking exactly as returned by the tool, or null if the question is not a ranking")
     assumptions: list[str] = Field(description="assumptions the answer depends on")
     confidence: Literal["low", "medium", "high"]
     uncertainty_notes: str = Field(description="what could make this answer wrong")
     data_sources: list[str] = Field(description="sources and periods behind the numbers")
+
+
+class AgentAnswer(ModelAnswer):
+    """What the API returns: the model's answer plus the ranking, attached by the server from the
+    engine's result. The model never re-types the ranking: that was slow (about 1,850 output
+    tokens for 50 hubs) and a source of copy errors."""
+    ranking: list[RankedHub] | None = Field(
+        default=None, description="ranking from the last rank_hubs call (added by the server), or null")

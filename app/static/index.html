@@ -176,7 +176,7 @@ function renderDetails(res) {
   html += list("Data sources", a.data_sources);
   const calls = res.tool_calls || [];
   html += `<h3>How it was computed</h3>`
-       + (calls.length ? `<ul>${calls.map(c => `<li><code>${esc(c.name)}</code>(${esc(JSON.stringify(c.input))})${c.is_error ? " - error" : ""}</li>`).join("")}</ul>`
+       + (calls.length ? `<ul>${calls.map(c => `<li><code>${esc(c.name)}</code>(${esc(JSON.stringify(c.input))})${c.is_error ? " - error" : ""}${c.cached ? " - repeated call, served from cache" : ""}</li>`).join("")}</ul>`
                        : "<p class='empty'>No tool was called (no numbers from the engine).</p>")
        + `<details><summary>Raw tool results</summary><pre>${esc(JSON.stringify(calls.map(c => c.result), null, 2))}</pre></details>`;
   html += `<div class="meta">Model ${esc(res.model)} - ${res.steps} steps - ${res.input_tokens} + ${res.output_tokens} tokens</div>`;

@@ -10,7 +10,7 @@ import anthropic
 from pydantic import BaseModel, ValidationError
 
 from app.agent.prompts import SYSTEM_PROMPT
-from app.agent.schemas import AgentAnswer
+from app.agent.schemas import AgentAnswer, ModelAnswer, RankedHub
 from app.agent.tools import run_tool, tool_definitions
 from app.settings import settings
 
@@ -23,6 +23,7 @@ class ToolCall(BaseModel):
     input: dict
     is_error: bool
     duration_ms: int
+    cached: bool = False  # True when an identical earlier call in this question was reused
     result: dict  # what the model saw (used by the evals' grounding check and the UI)
 
 
@@ -66,7 +67,7 @@ def _call_model(messages: list) -> object:
             system=SYSTEM_PROMPT,
             messages=messages,
             tools=tool_definitions(),
-            output_format=AgentAnswer,
+            output_format=ModelAnswer,
             output_config={"effort": settings.llm_effort},
             betas=[FALLBACK_BETA],
             fallbacks="default",  # if the model declines, the API retries on a fallback model
@@ -81,12 +82,21 @@ def _call_model(messages: list) -> object:
         raise AgentError(f"Cannot reach the Anthropic API: {exc}") from exc
 
 
+def _ranking_from(calls: list[ToolCall]) -> list[RankedHub] | None:
+    """The ranking from the last successful rank_hubs call, taken from the engine's result."""
+    for call in reversed(calls):
+        if call.name == "rank_hubs" and not call.is_error:
+            return [RankedHub(**{k: row[k] for k in RankedHub.model_fields}) for row in call.result["ranking"]]
+    return None
+
+
 def ask(question: str, history: list[dict] | None = None) -> AgentResult:
     """Answer one question. `history` is earlier turns as plain {role, content: str} messages."""
     messages = [*(history or []), {"role": "user", "content": question}]
     calls: list[ToolCall] = []
     tokens_in = tokens_out = 0
     retried_schema = False
+    cache: dict[tuple[str, str], tuple[dict, bool]] = {}
 
     for step in range(1, MAX_STEPS + 1):
         response = _call_model(messages)
@@ -104,19 +114,28 @@ def ask(question: str, history: list[dict] | None = None) -> AgentResult:
             for block in response.content:
                 if block.type != "tool_use":
                     continue
+                # Identical calls within one question are served from a cache: tools are
+                # deterministic, so a repeat adds tokens but no information (seen in eval run 1).
+                key = (block.name, json.dumps(block.input, sort_keys=True))
                 t0 = time.perf_counter()
-                result, is_error = run_tool(block.name, block.input)
-                calls.append(ToolCall(name=block.name, input=block.input, is_error=is_error,
+                cached = key in cache
+                if not cached:
+                    cache[key] = run_tool(block.name, block.input)
+                result, is_error = cache[key]
+                calls.append(ToolCall(name=block.name, input=block.input, is_error=is_error, cached=cached,
                                       duration_ms=int((time.perf_counter() - t0) * 1000), result=result))
+                content = (json.dumps({"note": "identical call already answered above; same result"})
+                           if cached else json.dumps(result))
                 results.append({"type": "tool_result", "tool_use_id": block.id,
-                                "content": json.dumps(result), "is_error": is_error})
+                                "content": content, "is_error": is_error})
             messages.append({"role": "user", "content": results})  # all results in one message
             continue
 
         # Final answer: structured output should guarantee valid JSON; validate anyway.
         text = _final_text(response.content)
         try:
-            answer = AgentAnswer.model_validate_json(text or "")
+            model_answer = ModelAnswer.model_validate_json(text or "")
+            answer = AgentAnswer(**model_answer.model_dump(), ranking=_ranking_from(calls))
         except ValidationError as exc:
             if retried_schema:
                 raise AgentError(f"Answer did not match the schema after a retry: {exc}") from exc

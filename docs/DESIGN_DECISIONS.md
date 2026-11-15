@@ -125,3 +125,17 @@ An agent failure returns HTTP 502 with a clear message, rather than a 500 crash,
 A **scripted fake Claude client** returns preset responses (a tool call, then an answer). This tests **our code**, the loop, the validation, the retry, refusal handling and history, quickly, for free, and with the same result every time.
 Whether *the model itself* chooses well is a different question, and that is what the **evals** are for, using real API calls. The separation is deliberate: tests check the code, evals check the model's behaviour.
 The tests also confirm the schemas are fully strict (every field required, no extra fields), so a future change cannot quietly break the format contract.
+
+---
+
+## 9. Changes after eval run 1 (see `docs/EVALS.md`)
+
+**Decision: should the model write the ranking at all?**
+Run 1 showed the model re-typing a 50-hub ranking as JSON (~1,850 output tokens) plus a table, taking 22 seconds. The model was copying data our code already had, which is slow, costs money, and can introduce copy errors (that is why the `ranking = engine` check existed).
+Chosen: split the schema. `ModelAnswer` (what the LLM must produce) holds only the explanation, assumptions, confidence, uncertainty and sources. `AgentAnswer` (what the API returns) adds `ranking`, attached by the server from the last `rank_hubs` result. The JSON-schema contract between LLM and code still holds; the data path no longer passes through the LLM at all.
+
+**Decision: how to stop duplicate tool calls?**
+A prompt rule alone depends on the model obeying it. Chosen: both a prompt rule and a per-question cache in the loop. Tools are deterministic, so a repeated call gets a short "already answered" result instead of the full JSON again.
+
+**Decision: fix the "5 years" grounding failure in the model or in the data?**
+Loosening the check would hide real problems. Chosen: put the fact in the tool's `method` (`weather_years: 5`), so the number has a source.

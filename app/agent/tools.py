@@ -16,6 +16,8 @@ COASTAL_WIND_HUBS = {"virginia_beach", "oakland", "boston"}
 METHOD = {
     "kpi": "expected disruption days per year (1.0 = one full operating day lost; partial days count as fractions)",
     "weather_period": f"{settings.history_start}..{settings.history_end} (Open-Meteo daily reanalysis)",
+    # Stated explicitly so the model never has to derive it from the dates (eval run 1 finding).
+    "weather_years": int(settings.history_end[:4]) - int(settings.history_start[:4]) + 1,
     "declarations_period": "2006..2026, FEMA major-disaster (DR) declarations, hurricanes and severe storms",
     "rules": "config/disruption.yaml, expert judgment, not calibrated on company downtime data",
 }

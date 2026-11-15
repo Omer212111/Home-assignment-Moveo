@@ -6,7 +6,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from app.agent import loop
-from app.agent.schemas import AgentAnswer
+from app.agent.schemas import AgentAnswer, ModelAnswer
 from app.agent.tools import run_tool, tool_definitions
 from app.main import app
 
@@ -51,7 +51,8 @@ def test_tool_schemas_are_strict():
 
 
 def test_answer_schema_is_strict():
-    schema = AgentAnswer.model_json_schema()
+    schema = ModelAnswer.model_json_schema()
+    assert "ranking" not in schema["properties"]   # the model never re-types the ranking
     assert schema["additionalProperties"] is False
     assert set(schema["required"]) == set(schema["properties"])
 
@@ -80,7 +81,7 @@ def _text(s):
 
 
 def _answer(**overrides):
-    a = {"answer_markdown": "Top hubs ...", "ranking": None, "assumptions": ["rules are expert judgment"],
+    a = {"answer_markdown": "Top hubs ...", "assumptions": ["rules are expert judgment"],
          "confidence": "medium", "uncertainty_notes": "not calibrated", "data_sources": ["Open-Meteo 2021-2025"]}
     return json.dumps({**a, **overrides})
 
@@ -106,7 +107,10 @@ def test_loop_runs_tool_then_returns_validated_answer(api, monkeypatch):
     assert [c.name for c in res.tool_calls] == ["rank_hubs"] and not res.tool_calls[0].is_error
     sent = fake.requests[1]["messages"][-1]["content"][0]   # tool result sent back to the model
     assert sent["type"] == "tool_result" and json.loads(sent["content"])["ranking"][0]["rank"] == 1
-    assert fake.requests[0]["output_format"] is AgentAnswer
+    assert fake.requests[0]["output_format"] is ModelAnswer
+    # the ranking is attached by the server, straight from the engine's result
+    assert [r.rank for r in res.answer.ranking] == [1, 2, 3]
+    assert res.answer.ranking[0].hub_id == res.tool_calls[0].result["ranking"][0]["hub_id"]
 
 
 def test_loop_retries_once_on_schema_mismatch(api, monkeypatch):
@@ -194,3 +198,22 @@ def test_index_serves_chat_ui(api):
     r = api.get("/")
     assert r.status_code == 200 and "text/html" in r.headers["content-type"]
     assert 'fetch("/chat"' in r.text
+
+
+
+def test_identical_tool_calls_are_served_from_cache(api, monkeypatch):
+    args = {"hazard": "total", "region": None, "top_n": 10}
+    fake = FakeClient([
+        _msg("tool_use", _tool_use("rank_hubs", args, "a"), _tool_use("rank_hubs", dict(args), "b")),
+        _msg("end_turn", _text(_answer())),
+    ])
+    monkeypatch.setattr(loop, "client", lambda: fake)
+    res = loop.ask("top 10?")
+    assert [c.cached for c in res.tool_calls] == [False, True]
+    sent = fake.requests[1]["messages"][-1]["content"]
+    assert len(sent) == 2 and "already answered" in sent[1]["content"]   # every tool_use gets a result
+
+
+def test_no_tool_call_means_no_ranking(api, monkeypatch):
+    monkeypatch.setattr(loop, "client", lambda: FakeClient([_msg("end_turn", _text(_answer(confidence="low")))]))
+    assert loop.ask("weather in Paris?").answer.ranking is None
