@@ -1,0 +1,790 @@
+{
+  "run_at": "2026-11-15T17:07:04+00:00",
+  "model": "claude-sonnet-5-5",
+  "checks": 37,
+  "failed": 0,
+  "tokens": [
+    58103,
+    4823
+  ],
+  "turns": [
+    {
+      "case": "baseline_top10",
+      "turn": 1,
+      "question": "What are the 10 most dangerous hubs?",
+      "seconds": 10.8,
+      "checks": {
+        "calls rank_hubs": null,
+        "tool arguments": null,
+        "ranking present": null,
+        "ranking = engine": null,
+        "numbers grounded": null,
+        "counts correct": null
+      },
+      "answer": {
+        "answer_markdown": "The 10 hubs with the most expected weather disruption days per year (all hazards combined):\n\n| Rank | Hub | Days/yr | Main hazard |\n|---|---|---|---|\n| 1 | Boston, MA | 13.071 | Winter storms |\n| 2 | Minneapolis, MN | 11.711 | Winter storms |\n| 3 | Denver, CO | 10.341 | Winter storms |\n| 4 | Milwaukee, WI | 10.271 | Winter storms |\n| 5 | Chicago, IL | 9.551 | Winter storms |\n| 6 | Virginia Beach, VA | 8.796 | High wind |\n| 7 | New York, NY | 8.751 | Winter storms |\n| 8 | Colorado Springs, CO | 8.381 | Winter storms |\n| 9 | Kansas City, MO | 8.131 | Winter storms |\n| 10 | Detroit, MI | 8.116 | Winter storms |\n\nThe full list is in the ranking table.\n\n**Drivers:** Nine of the ten hubs are driven mainly by winter weather. The biggest drivers are snow of about 10 cm or more, which closes the hub, and the recovery days after it. Snow of 2-7 cm, which slows operations, also contributes. Virginia Beach is the exception, and its main driver is high wind: gusts of 75 km/h or more limit dock work, and gusts of 90 km/h or more stop operations.\n\n**Caveat:** High-wind days are likely overstated for Boston and Virginia Beach, because their coastal grid cells are partly over water. Both would likely rank lower with a corrected wind figure. All hubs had complete data.",
+        "assumptions": [
+          "Disruption days come from a rule-based model whose thresholds are expert judgment. They are not calibrated on the company's own downtime data.",
+          "'Most dangerous' means all hazards combined (total).",
+          "One disruption day means one full operating day lost, and partial days count as fractions."
+        ],
+        "confidence": "medium",
+        "uncertainty_notes": "The thresholds are not calibrated on actual downtime. The weather record covers only 5 years (2021-2025), so rare events may be under- or over-represented. Coastal wind is likely overstated for Boston and Virginia Beach, which could change their ranks. The gaps between neighbouring hubs are small, so the order within the top 10 is not firm.",
+        "data_sources": [
+          "Open-Meteo daily reanalysis, 2021-01-01 to 2025-12-31",
+          "FEMA major-disaster declarations (hurricanes and severe storms), 2006-2026",
+          "rank_hubs tool, hazard=total, all regions, top 10"
+        ],
+        "ranking": [
+          {
+            "rank": 1,
+            "hub_id": "boston",
+            "city": "Boston",
+            "days_per_year": 13.071,
+            "main_hazard": "Winter storms, snow and ice"
+          },
+          {
+            "rank": 2,
+            "hub_id": "minneapolis",
+            "city": "Minneapolis",
+            "days_per_year": 11.711,
+            "main_hazard": "Winter storms, snow and ice"
+          },
+          {
+            "rank": 3,
+            "hub_id": "denver",
+            "city": "Denver",
+            "days_per_year": 10.341,
+            "main_hazard": "Winter storms, snow and ice"
+          },
+          {
+            "rank": 4,
+            "hub_id": "milwaukee",
+            "city": "Milwaukee",
+            "days_per_year": 10.271,
+            "main_hazard": "Winter storms, snow and ice"
+          },
+          {
+            "rank": 5,
+            "hub_id": "chicago",
+            "city": "Chicago",
+            "days_per_year": 9.551,
+            "main_hazard": "Winter storms, snow and ice"
+          },
+          {
+            "rank": 6,
+            "hub_id": "virginia_beach",
+            "city": "Virginia Beach",
+            "days_per_year": 8.796,
+            "main_hazard": "High wind"
+          },
+          {
+            "rank": 7,
+            "hub_id": "new_york",
+            "city": "New York",
+            "days_per_year": 8.751,
+            "main_hazard": "Winter storms, snow and ice"
+          },
+          {
+            "rank": 8,
+            "hub_id": "colorado_springs",
+            "city": "Colorado Springs",
+            "days_per_year": 8.381,
+            "main_hazard": "Winter storms, snow and ice"
+          },
+          {
+            "rank": 9,
+            "hub_id": "kansas_city",
+            "city": "Kansas City",
+            "days_per_year": 8.131,
+            "main_hazard": "Winter storms, snow and ice"
+          },
+          {
+            "rank": 10,
+            "hub_id": "detroit",
+            "city": "Detroit",
+            "days_per_year": 8.116,
+            "main_hazard": "Winter storms, snow and ice"
+          }
+        ]
+      },
+      "tool_calls": [
+        {
+          "name": "rank_hubs",
+          "input": {
+            "hazard": "total",
+            "region": null,
+            "top_n": 10
+          }
+        },
+        {
+          "name": "rank_hubs",
+          "input": {
+            "hazard": "total",
+            "region": null,
+            "top_n": 10
+          }
+        }
+      ]
+    },
+    {
+      "case": "region_hazard_small_n",
+      "turn": 1,
+      "question": "Which 3 Midwest hubs are most exposed to winter disruption?",
+      "seconds": 7.5,
+      "checks": {
+        "calls rank_hubs": null,
+        "tool arguments": null,
+        "ranking present": null,
+        "ranking = engine": null,
+        "numbers grounded": null,
+        "counts correct": null
+      },
+      "answer": {
+        "answer_markdown": "The three Midwest hubs most exposed to winter disruption are Minneapolis, Chicago and Milwaukee. The full list is in the ranking table.\n\n| Rank | Hub | Winter disruption days/year |\n|---|---|---|\n| 1 | Minneapolis, MN | 10.461 |\n| 2 | Chicago, IL | 7.851 |\n| 3 | Milwaukee, WI | 7.621 |\n\nSnow drives all three. Minneapolis and Chicago lose the most days to heavy snow (7 cm or more, which closes the hub) and to moderate snow (2\u20137 cm, which slows it). In Milwaukee, moderate snow that slows operations is the largest driver, with heavy-snow closures close behind. Minneapolis is ahead of the other two by a wide margin. The gap from first to third is 2.84 days per year.",
+        "assumptions": [
+          "The KPI is expected disruption days per year, where 1.0 is one full operating day lost.",
+          "It comes from a rule-based model whose thresholds are expert judgment. They are not calibrated on the company's own downtime data.",
+          "The model counts only winter hazards in this ranking."
+        ],
+        "confidence": "medium",
+        "uncertainty_notes": "The weather record covers only five years (2021\u20132025), so unusually mild or severe winters could shift the values and the order, especially for Chicago and Milwaukee, which are close. The thresholds are not calibrated on real downtime. All 3 hubs returned had complete data, and none were excluded.",
+        "data_sources": [
+          "Open-Meteo daily reanalysis, 2021-01-01 to 2025-12-31",
+          "Disruption rules in config/disruption.yaml (expert judgment)",
+          "FEMA major-disaster declarations 2006\u20132026 (hurricanes and severe storms; not a factor in the winter ranking)"
+        ],
+        "ranking": [
+          {
+            "rank": 1,
+            "hub_id": "minneapolis",
+            "city": "Minneapolis",
+            "days_per_year": 10.461,
+            "main_hazard": "Winter storms, snow and ice"
+          },
+          {
+            "rank": 2,
+            "hub_id": "chicago",
+            "city": "Chicago",
+            "days_per_year": 7.851,
+            "main_hazard": "Winter storms, snow and ice"
+          },
+          {
+            "rank": 3,
+            "hub_id": "milwaukee",
+            "city": "Milwaukee",
+            "days_per_year": 7.621,
+            "main_hazard": "Winter storms, snow and ice"
+          }
+        ]
+      },
+      "tool_calls": [
+        {
+          "name": "rank_hubs",
+          "input": {
+            "hazard": "winter",
+            "region": "Midwest",
+            "top_n": 3
+          }
+        }
+      ]
+    },
+    {
+      "case": "impossible_n",
+      "turn": 1,
+      "question": "Show me the top 100 riskiest hubs.",
+      "seconds": 9.6,
+      "checks": {
+        "calls rank_hubs": null,
+        "tool arguments": null,
+        "ranking present": null,
+        "mentions '50'": null,
+        "ranking = engine": null,
+        "numbers grounded": null,
+        "counts correct": null
+      },
+      "answer": {
+        "answer_markdown": "There are only 50 hubs, so the ranking covers all of them, not 100. Here are the top 10 by total expected disruption days per year. The full list is in the ranking table.\n\n| Rank | Hub | Days/yr | Main hazard |\n|---|---|---|---|\n| 1 | Boston, MA | 13.07 | Winter storms, snow and ice |\n| 2 | Minneapolis, MN | 11.71 | Winter storms, snow and ice |\n| 3 | Denver, CO | 10.34 | Winter storms, snow and ice |\n| 4 | Milwaukee, WI | 10.27 | Winter storms, snow and ice |\n| 5 | Chicago, IL | 9.55 | Winter storms, snow and ice |\n| 6 | Virginia Beach, VA | 8.80 | High wind |\n| 7 | New York, NY | 8.75 | Winter storms, snow and ice |\n| 8 | Colorado Springs, CO | 8.38 | Winter storms, snow and ice |\n| 9 | Kansas City, MO | 8.13 | Winter storms, snow and ice |\n| 10 | Detroit, MI | 8.12 | Winter storms, snow and ice |\n\n**What drives the top hubs:** Winter is the main driver. Snow of 7 cm or more closes the hub, and the recovery days after it add to the loss. Snow of 2\u20137 cm slows operations. Virginia Beach is driven by high wind: gusts of 75 km/h or more limit dock work, and gusts of 90 km/h or more stop operations.\n\n**Caveat:** High-wind days are likely overstated for coastal hubs, because their grid cell is partly over water. This applies to Boston and Virginia Beach in the top 10, and to Oakland further down.\n\nAll 50 hubs were ranked. None were dropped for incomplete data.",
+        "assumptions": [
+          "The KPI is expected disruption days per year, where 1.0 is one full operating day lost. It comes from a rule-based model whose thresholds are expert judgment. They are not calibrated on the company's own downtime data.",
+          "Only 50 hubs exist, so a request for the top 100 returns all 50."
+        ],
+        "confidence": "medium",
+        "uncertainty_notes": "The thresholds are not calibrated on real downtime. The weather data covers only 5 years (2021\u20132025), so rare events may be under- or over-represented. Coastal high-wind figures are likely overstated, which could push Boston, Virginia Beach and Oakland too high.",
+        "data_sources": [
+          "Open-Meteo daily reanalysis, 2021-01-01 to 2025-12-31",
+          "FEMA major-disaster declarations (hurricanes and severe storms), 2006\u20132026",
+          "Disruption rules in config/disruption.yaml"
+        ],
+        "ranking": [
+          {
+            "rank": 1,
+            "hub_id": "boston",
+            "city": "Boston",
+            "days_per_year": 13.071,
+            "main_hazard": "Winter storms, snow and ice"
+          },
+          {
+            "rank": 2,
+            "hub_id": "minneapolis",
+            "city": "Minneapolis",
+            "days_per_year": 11.711,
+            "main_hazard": "Winter storms, snow and ice"
+          },
+          {
+            "rank": 3,
+            "hub_id": "denver",
+            "city": "Denver",
+            "days_per_year": 10.341,
+            "main_hazard": "Winter storms, snow and ice"
+          },
+          {
+            "rank": 4,
+            "hub_id": "milwaukee",
+            "city": "Milwaukee",
+            "days_per_year": 10.271,
+            "main_hazard": "Winter storms, snow and ice"
+          },
+          {
+            "rank": 5,
+            "hub_id": "chicago",
+            "city": "Chicago",
+            "days_per_year": 9.551,
+            "main_hazard": "Winter storms, snow and ice"
+          },
+          {
+            "rank": 6,
+            "hub_id": "virginia_beach",
+            "city": "Virginia Beach",
+            "days_per_year": 8.796,
+            "main_hazard": "High wind"
+          },
+          {
+            "rank": 7,
+            "hub_id": "new_york",
+            "city": "New York",
+            "days_per_year": 8.751,
+            "main_hazard": "Winter storms, snow and ice"
+          },
+          {
+            "rank": 8,
+            "hub_id": "colorado_springs",
+            "city": "Colorado Springs",
+            "days_per_year": 8.381,
+            "main_hazard": "Winter storms, snow and ice"
+          },
+          {
+            "rank": 9,
+            "hub_id": "kansas_city",
+            "city": "Kansas City",
+            "days_per_year": 8.131,
+            "main_hazard": "Winter storms, snow and ice"
+          },
+          {
+            "rank": 10,
+            "hub_id": "detroit",
+            "city": "Detroit",
+            "days_per_year": 8.116,
+            "main_hazard": "Winter storms, snow and ice"
+          },
+          {
+            "rank": 11,
+            "hub_id": "portland",
+            "city": "Portland",
+            "days_per_year": 7.706,
+            "main_hazard": "Winter storms, snow and ice"
+          },
+          {
+            "rank": 12,
+            "hub_id": "omaha",
+            "city": "Omaha",
+            "days_per_year": 7.296,
+            "main_hazard": "Winter storms, snow and ice"
+          },
+          {
+            "rank": 13,
+            "hub_id": "philadelphia",
+            "city": "Philadelphia",
+            "days_per_year": 7.191,
+            "main_hazard": "Winter storms, snow and ice"
+          },
+          {
+            "rank": 14,
+            "hub_id": "baltimore",
+            "city": "Baltimore",
+            "days_per_year": 6.936,
+            "main_hazard": "Winter storms, snow and ice"
+          },
+          {
+            "rank": 15,
+            "hub_id": "washington_dc",
+            "city": "Washington",
+            "days_per_year": 6.37,
+            "main_hazard": "Winter storms, snow and ice"
+          },
+          {
+            "rank": 16,
+            "hub_id": "oakland",
+            "city": "Oakland",
+            "days_per_year": 6.131,
+            "main_hazard": "High wind"
+          },
+          {
+            "rank": 17,
+            "hub_id": "dallas",
+            "city": "Dallas",
+            "days_per_year": 6.08,
+            "main_hazard": "Extreme rain and flooding"
+          },
+          {
+            "rank": 18,
+            "hub_id": "albuquerque",
+            "city": "Albuquerque",
+            "days_per_year": 5.896,
+            "main_hazard": "High wind"
+          },
+          {
+            "rank": 19,
+            "hub_id": "oklahoma_city",
+            "city": "Oklahoma City",
+            "days_per_year": 5.83,
+            "main_hazard": "High wind"
+          },
+          {
+            "rank": 20,
+            "hub_id": "seattle",
+            "city": "Seattle",
+            "days_per_year": 5.765,
+            "main_hazard": "Winter storms, snow and ice"
+          },
+          {
+            "rank": 21,
+            "hub_id": "nashville",
+            "city": "Nashville",
+            "days_per_year": 5.49,
+            "main_hazard": "Extreme rain and flooding"
+          },
+          {
+            "rank": 22,
+            "hub_id": "fort_worth",
+            "city": "Fort Worth",
+            "days_per_year": 5.11,
+            "main_hazard": "Winter storms, snow and ice"
+          },
+          {
+            "rank": 23,
+            "hub_id": "las_vegas",
+            "city": "Las Vegas",
+            "days_per_year": 5.11,
+            "main_hazard": "Extreme heat"
+          },
+          {
+            "rank": 24,
+            "hub_id": "tampa",
+            "city": "Tampa",
+            "days_per_year": 4.975,
+            "main_hazard": "Hurricanes and tropical storms"
+          },
+          {
+            "rank": 25,
+            "hub_id": "tulsa",
+            "city": "Tulsa",
+            "days_per_year": 4.905,
+            "main_hazard": "Winter storms, snow and ice"
+          },
+          {
+            "rank": 26,
+            "hub_id": "phoenix",
+            "city": "Phoenix",
+            "days_per_year": 4.801,
+            "main_hazard": "Extreme heat"
+          },
+          {
+            "rank": 27,
+            "hub_id": "san_francisco",
+            "city": "San Francisco",
+            "days_per_year": 4.676,
+            "main_hazard": "High wind"
+          },
+          {
+            "rank": 28,
+            "hub_id": "houston",
+            "city": "Houston",
+            "days_per_year": 4.675,
+            "main_hazard": "Extreme rain and flooding"
+          },
+          {
+            "rank": 29,
+            "hub_id": "columbus",
+            "city": "Columbus",
+            "days_per_year": 4.65,
+            "main_hazard": "Winter storms, snow and ice"
+          },
+          {
+            "rank": 30,
+            "hub_id": "arlington_tx",
+            "city": "Arlington",
+            "days_per_year": 4.56,
+            "main_hazard": "Winter storms, snow and ice"
+          },
+          {
+            "rank": 31,
+            "hub_id": "indianapolis",
+            "city": "Indianapolis",
+            "days_per_year": 4.55,
+            "main_hazard": "Winter storms, snow and ice"
+          },
+          {
+            "rank": 32,
+            "hub_id": "memphis",
+            "city": "Memphis",
+            "days_per_year": 4.505,
+            "main_hazard": "Winter storms, snow and ice"
+          },
+          {
+            "rank": 33,
+            "hub_id": "jacksonville",
+            "city": "Jacksonville",
+            "days_per_year": 4.2,
+            "main_hazard": "Hurricanes and tropical storms"
+          },
+          {
+            "rank": 34,
+            "hub_id": "miami",
+            "city": "Miami",
+            "days_per_year": 4.2,
+            "main_hazard": "Extreme rain and flooding"
+          },
+          {
+            "rank": 35,
+            "hub_id": "mesa",
+            "city": "Mesa",
+            "days_per_year": 4.031,
+            "main_hazard": "Extreme heat"
+          },
+          {
+            "rank": 36,
+            "hub_id": "louisville",
+            "city": "Louisville",
+            "days_per_year": 3.925,
+            "main_hazard": "Winter storms, snow and ice"
+          },
+          {
+            "rank": 37,
+            "hub_id": "atlanta",
+            "city": "Atlanta",
+            "days_per_year": 3.81,
+            "main_hazard": "Extreme rain and flooding"
+          },
+          {
+            "rank": 38,
+            "hub_id": "austin",
+            "city": "Austin",
+            "days_per_year": 3.67,
+            "main_hazard": "Extreme rain and flooding"
+          },
+          {
+            "rank": 39,
+            "hub_id": "el_paso",
+            "city": "El Paso",
+            "days_per_year": 3.365,
+            "main_hazard": "High wind"
+          },
+          {
+            "rank": 40,
+            "hub_id": "sacramento",
+            "city": "Sacramento",
+            "days_per_year": 3.345,
+            "main_hazard": "High wind"
+          },
+          {
+            "rank": 41,
+            "hub_id": "bakersfield",
+            "city": "Bakersfield",
+            "days_per_year": 3.015,
+            "main_hazard": "Extreme heat"
+          },
+          {
+            "rank": 42,
+            "hub_id": "raleigh",
+            "city": "Raleigh",
+            "days_per_year": 2.985,
+            "main_hazard": "High wind"
+          },
+          {
+            "rank": 43,
+            "hub_id": "charlotte",
+            "city": "Charlotte",
+            "days_per_year": 2.47,
+            "main_hazard": "Winter storms, snow and ice"
+          },
+          {
+            "rank": 44,
+            "hub_id": "fresno",
+            "city": "Fresno",
+            "days_per_year": 1.635,
+            "main_hazard": "Extreme heat"
+          },
+          {
+            "rank": 45,
+            "hub_id": "tucson",
+            "city": "Tucson",
+            "days_per_year": 1.565,
+            "main_hazard": "High wind"
+          },
+          {
+            "rank": 46,
+            "hub_id": "san_antonio",
+            "city": "San Antonio",
+            "days_per_year": 1.395,
+            "main_hazard": "Hurricanes and tropical storms"
+          },
+          {
+            "rank": 47,
+            "hub_id": "los_angeles",
+            "city": "Los Angeles",
+            "days_per_year": 1.185,
+            "main_hazard": "Extreme rain and flooding"
+          },
+          {
+            "rank": 48,
+            "hub_id": "san_jose",
+            "city": "San Jose",
+            "days_per_year": 0.8,
+            "main_hazard": "Extreme rain and flooding"
+          },
+          {
+            "rank": 49,
+            "hub_id": "long_beach",
+            "city": "Long Beach",
+            "days_per_year": 0.425,
+            "main_hazard": "Severe storms and tornadoes"
+          },
+          {
+            "rank": 50,
+            "hub_id": "san_diego",
+            "city": "San Diego",
+            "days_per_year": 0.2,
+            "main_hazard": "Extreme rain and flooding"
+          }
+        ]
+      },
+      "tool_calls": [
+        {
+          "name": "rank_hubs",
+          "input": {
+            "hazard": "total",
+            "region": null,
+            "top_n": 50
+          }
+        },
+        {
+          "name": "rank_hubs",
+          "input": {
+            "hazard": "total",
+            "region": null,
+            "top_n": 50
+          }
+        }
+      ]
+    },
+    {
+      "case": "out_of_scope",
+      "turn": 1,
+      "question": "What will the weather be in Paris next week, and how risky is our Paris hub?",
+      "seconds": 3.3,
+      "checks": {
+        "no tool call": null,
+        "ranking null": null,
+        "confidence": null,
+        "ranking = engine": null,
+        "numbers grounded": null,
+        "counts correct": null
+      },
+      "answer": {
+        "answer_markdown": "This is out of scope for me, so I didn't call any tools. I can't give a weather forecast for Paris next week, because I don't cover future forecasts. Paris is also not one of the company's 50 US hubs, so I have no exposure data for a Paris hub.\n\nI can rank the 50 US hubs by expected weather disruption days per year, overall or for one hazard, and optionally within a US Census region. Let me know if you'd like that.",
+        "assumptions": [
+          "The question concerns a Paris outside the set of 50 US hubs, which are one per city among the 50 most populous US cities.",
+          "Future weather forecasts are not covered by the available tools."
+        ],
+        "confidence": "low",
+        "uncertainty_notes": "No data was consulted. If you meant a US hub, tell me which one and I can check its exposure ranking.",
+        "data_sources": [],
+        "ranking": null
+      },
+      "tool_calls": []
+    },
+    {
+      "case": "follow_up_context",
+      "turn": 1,
+      "question": "Which hubs are most at risk from hurricanes?",
+      "seconds": 7.0,
+      "checks": {
+        "calls rank_hubs": null,
+        "tool arguments": null,
+        "ranking present": null,
+        "ranking = engine": null,
+        "numbers grounded": null,
+        "counts correct": null
+      },
+      "answer": {
+        "answer_markdown": "Jacksonville, Tampa and Miami are the hubs most exposed to hurricanes and tropical storms. The figures below are expected tropical disruption days per year.\n\n| Rank | Hub | Tropical days/yr |\n|---|---|---|\n| 1 | Jacksonville, FL | 3.15 |\n| 2 | Tampa, FL | 2.8 |\n| 3 | Miami, FL | 1.4 |\n| 4 | Houston, TX | 1.05 |\n| 5 | New York, NY | 1.05 |\n| 6 | Philadelphia, PA | 1.05 |\n| 7 | Atlanta, GA | 0.7 |\n| 8 | Baltimore, MD | 0.7 |\n| 9 | San Antonio, TX | 0.7 |\n| 10 | Virginia Beach, VA | 0.7 |\n\nThe tropical figure is the same driver for every hub: a pre-landfall shutdown plus power restoration afterward. The full list is in the ranking table.\n\nMiami and Houston lose more days to flooding (2.6 and 2.5 days/yr) than to tropical storms. Virginia Beach's high-wind days are probably overstated because its coastal grid cell is partly over water. That caveat doesn't affect its tropical figure. All 50 hubs had complete data.",
+        "assumptions": [
+          "The KPI is expected disruption days per year from a rule-based model. Its thresholds come from expert judgment and are not calibrated on the company's own downtime data.",
+          "\"Hurricanes\" is read as the tropical hazard, which covers hurricanes and tropical storms."
+        ],
+        "confidence": "medium",
+        "uncertainty_notes": "The weather data covers only 5 years, and hurricane landfalls are rare and variable, so the tropical estimates are uncertain. Hubs with tied values (Houston, New York and Philadelphia; Atlanta, Baltimore, San Antonio and Virginia Beach) are not clearly distinguishable. The thresholds are not validated against actual downtime.",
+        "data_sources": [
+          "Open-Meteo daily reanalysis, 2021-01-01 to 2025-12-31",
+          "FEMA major-disaster declarations for hurricanes and severe storms, 2006 to 2026",
+          "Rule set in config/disruption.yaml (expert judgment)"
+        ],
+        "ranking": [
+          {
+            "rank": 1,
+            "hub_id": "jacksonville",
+            "city": "Jacksonville",
+            "days_per_year": 3.15,
+            "main_hazard": "Hurricanes and tropical storms"
+          },
+          {
+            "rank": 2,
+            "hub_id": "tampa",
+            "city": "Tampa",
+            "days_per_year": 2.8,
+            "main_hazard": "Hurricanes and tropical storms"
+          },
+          {
+            "rank": 3,
+            "hub_id": "miami",
+            "city": "Miami",
+            "days_per_year": 1.4,
+            "main_hazard": "Hurricanes and tropical storms"
+          },
+          {
+            "rank": 4,
+            "hub_id": "houston",
+            "city": "Houston",
+            "days_per_year": 1.05,
+            "main_hazard": "Hurricanes and tropical storms"
+          },
+          {
+            "rank": 5,
+            "hub_id": "new_york",
+            "city": "New York",
+            "days_per_year": 1.05,
+            "main_hazard": "Hurricanes and tropical storms"
+          },
+          {
+            "rank": 6,
+            "hub_id": "philadelphia",
+            "city": "Philadelphia",
+            "days_per_year": 1.05,
+            "main_hazard": "Hurricanes and tropical storms"
+          },
+          {
+            "rank": 7,
+            "hub_id": "atlanta",
+            "city": "Atlanta",
+            "days_per_year": 0.7,
+            "main_hazard": "Hurricanes and tropical storms"
+          },
+          {
+            "rank": 8,
+            "hub_id": "baltimore",
+            "city": "Baltimore",
+            "days_per_year": 0.7,
+            "main_hazard": "Hurricanes and tropical storms"
+          },
+          {
+            "rank": 9,
+            "hub_id": "san_antonio",
+            "city": "San Antonio",
+            "days_per_year": 0.7,
+            "main_hazard": "Hurricanes and tropical storms"
+          },
+          {
+            "rank": 10,
+            "hub_id": "virginia_beach",
+            "city": "Virginia Beach",
+            "days_per_year": 0.7,
+            "main_hazard": "Hurricanes and tropical storms"
+          }
+        ]
+      },
+      "tool_calls": [
+        {
+          "name": "rank_hubs",
+          "input": {
+            "hazard": "tropical",
+            "region": null,
+            "top_n": 10
+          }
+        }
+      ]
+    },
+    {
+      "case": "follow_up_context",
+      "turn": 2,
+      "question": "Only the ones in the South, top 3.",
+      "seconds": 5.5,
+      "checks": {
+        "calls rank_hubs": null,
+        "tool arguments": null,
+        "ranking present": null,
+        "ranking = engine": null,
+        "numbers grounded": null,
+        "counts correct": null
+      },
+      "answer": {
+        "answer_markdown": "In the South, Jacksonville, Tampa and Miami are the three hubs most exposed to hurricanes and tropical storms. All three are in Florida. The figures are expected tropical disruption days per year.\n\n| Rank | Hub | Tropical days/yr |\n|---|---|---|\n| 1 | Jacksonville, FL | 3.15 |\n| 2 | Tampa, FL | 2.8 |\n| 3 | Miami, FL | 1.4 |\n\nThe driver is the same for all three: a pre-landfall shutdown plus power restoration afterward. The gap between first and last place is 1.75 days per year. Miami loses more days to flooding (2.6 days/yr) than to tropical storms. The full list is in the ranking table. All hubs had complete data, so none were left out.",
+        "assumptions": [
+          "The KPI is expected disruption days per year from a rule-based model. Its thresholds come from expert judgment and are not calibrated on the company's own downtime data.",
+          "\"Hurricanes\" is read as the tropical hazard, which covers hurricanes and tropical storms.",
+          "\"South\" means the US Census South region."
+        ],
+        "confidence": "medium",
+        "uncertainty_notes": "The weather data covers only 5 years, and hurricane landfalls are rare and variable, so the tropical estimates are uncertain. The thresholds have not been checked against actual downtime.",
+        "data_sources": [
+          "Open-Meteo daily reanalysis, 2021-01-01 to 2025-12-31",
+          "FEMA major-disaster declarations for hurricanes and severe storms, 2006 to 2026",
+          "Rule set in config/disruption.yaml (expert judgment)"
+        ],
+        "ranking": [
+          {
+            "rank": 1,
+            "hub_id": "jacksonville",
+            "city": "Jacksonville",
+            "days_per_year": 3.15,
+            "main_hazard": "Hurricanes and tropical storms"
+          },
+          {
+            "rank": 2,
+            "hub_id": "tampa",
+            "city": "Tampa",
+            "days_per_year": 2.8,
+            "main_hazard": "Hurricanes and tropical storms"
+          },
+          {
+            "rank": 3,
+            "hub_id": "miami",
+            "city": "Miami",
+            "days_per_year": 1.4,
+            "main_hazard": "Hurricanes and tropical storms"
+          }
+        ]
+      },
+      "tool_calls": [
+        {
+          "name": "rank_hubs",
+          "input": {
+            "hazard": "tropical",
+            "region": "South",
+            "top_n": 3
+          }
+        }
+      ]
+    }
+  ]
+}
