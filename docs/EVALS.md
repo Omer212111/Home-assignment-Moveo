@@ -4,8 +4,27 @@ Two layers:
 
 | Layer | What it checks | How to run | Cost |
 |---|---|---|---|
-| Unit tests (`tests/`) | Our code: scoring rules, ingestion, API, agent loop (with a scripted fake Claude and the real SDK on a mocked network), and the eval checks themselves | `uv run pytest -q` | free, offline |
-| Agent evals (`evals/`) | The real model's behaviour on edge cases | `uv run python -m evals.run` | ~$0.20 per run (Sonnet 5.5) |
+| Unit tests (`tests/`, 89) | Our code: scoring rules, time breakdowns, scoring runs, alerts and concurrency, ingestion, API, agent loop (scripted fake Claude), the eval checks and the runner | `uv run pytest -q`; **on every push in GitHub Actions** (`.github/workflows/tests.yml`) | free, offline |
+| Agent evals (`evals/`, 24 cases / 29 turns) | The real model's behaviour on edge cases | `uv run python -m evals.run` (`--case a,b`, `--repeat N`) | ~$0.80 per repeat (Sonnet 5.5) |
+
+### How a run is scored (since run 9)
+- **Two scores.** *Correctness* checks decide whether the answer is right: tool and arguments
+  (passes if **any** call used the expected arguments), ranking = engine (compared with the engine's
+  ranking **for the expected arguments**, i.e. what the user should see), every number grounded,
+  counts, expected and **forbidden** phrases, confidence. *Efficiency* checks are a budget: model
+  calls (default: 1 without a tool, 2 with one tool) and latency (15 s). Reported separately, so
+  "correct but slow" is visible without hiding real errors; only correctness sets the exit code.
+- **`--repeat N`** runs every case N times and reports a pass rate per check (the model is not
+  deterministic: runs 2-8 showed the same case passing and failing).
+- **History.** Each run is saved as `evals/history/<time>_<commit>.json` and compared with the
+  previous one: checks that got worse or better, cost per turn, latency, model calls.
+- Summary line: p50 / p95 latency and cost per turn.
+
+### Robustness cases (added after run 8)
+Ambiguous names (Portland, Arlington), typos ("Huston", "Dalas"), prompt injection, a system-prompt
+leak attempt, cost in dollars (not modelled: no invented money), a forecast (out of scope), inches
+(the data is in cm; converting is arithmetic the model must not do), and a 4-turn conversation that
+narrows hazard -> region -> the top hub's months -> a season comparison.
 
 ## Eval cases (`evals/cases.yaml`)
 

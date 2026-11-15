@@ -57,7 +57,8 @@ Work started around 13:30 UTC on 2026-11-15; about 4 hours used so far.
 | Write path | `app/ingest.py::score_after_ingest` | ingestion creates the scoring run (`DESIGN_DECISIONS.md` section 19) |
 | Alerts | `app/alerts.py`, `config/alerts.yaml` | monthly outlook digest (index >= 300, >= 3 events, 7 days ahead) + score-change alerts (>= 25 points or tier), dedup, outbox delivery with leases, safe under concurrency (`DESIGN_DECISIONS.md` sections 20-21) |
 | Deploy | `Dockerfile`, `render.yaml`, `APP_PASSWORD` | README section 1a |
-| Tests | `tests/` | 85 offline tests (`uv run pytest -q`) |
+| Evals | `evals/` | 24 cases / 29 turns; correctness vs efficiency; `--repeat`; history + comparison; CI for offline tests |
+| Tests | `tests/` | 89 offline tests (`uv run pytest -q`) |
 | Evals | `evals/cases.yaml`, `evals/checks.py`, `evals/run.py` | 15 cases / 17 turns; `uv run python -m evals.run` (~$0.16-0.20 per run, laptop only) |
 
 Current top of the ranking: Boston 13.1, Minneapolis 11.7, Denver 10.3, Milwaukee 10.3, Chicago 9.6 (winter-driven). Virginia Beach (#6) is inflated by coastal wind, a documented limitation.

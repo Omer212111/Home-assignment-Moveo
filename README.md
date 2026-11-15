@@ -370,18 +370,26 @@ Two layers:
 
 | Layer | Checks | Command | Cost |
 |---|---|---|---|
-| Unit tests (`tests/`, 85 tests) | Scoring rules, time breakdowns, stored scoring runs, ingestion, API, agent loop with a scripted fake Claude, the eval checks themselves, Redis cache | `uv run pytest -q` | free, offline |
-| Agent evals (`evals/`, 15 cases / 17 turns) | The real model on edge cases: the 4 assignment questions, a city that is not a hub, "top 100" when only 50 exist, follow-ups, "winter" hazard vs season, safest hubs, worst month, per-year comparison, hurricane season | `uv run python -m evals.run` | ~$0.55 |
+| Unit tests (`tests/`, 89 tests; run on every push by GitHub Actions) | Scoring rules, time breakdowns, stored scoring runs, ingestion, API, agent loop with a scripted fake Claude, the eval checks themselves, Redis cache | `uv run pytest -q` | free, offline |
+| Agent evals (`evals/`, 24 cases / 29 turns) | The real model on edge cases: the 4 assignment questions, a city that is not a hub, "top 100" when only 50 exist, follow-ups, "winter" hazard vs season, safest hubs, worst month, per-year comparison, hurricane season | `uv run python -m evals.run` | ~$0.80 |
 
 Checks on every turn: valid answer format, the right tool with the right arguments, ranking equal
 to the engine's, **every number in the answer grounded** in a tool result or the question, counts
 ("8 of the 10") correct. Each turn's trajectory is saved in `evals/trajectories/`.
 
-Run one case:
+Two scores per run: **correctness** (is the answer right?) and **efficiency** (model calls and
+latency within budget). Each run is saved in `evals/history/` and compared with the previous one.
+Some cases, or every case several times to get pass rates:
 
 ```
-uv run python -m evals.run --case snowfall_percentage
+uv run python -m evals.run --case snowfall_percentage,prompt_injection
+uv run python -m evals.run --repeat 3
 ```
+
+The set has 24 cases: the 4 assignment questions, follow-ups, out-of-scope, "winter" hazard vs
+season, safest hubs, months / seasons / years, and robustness (ambiguous and misspelled names,
+prompt injection, a system-prompt leak attempt, money and forecasts that must not be invented, a
+units trap, a 4-turn conversation).
 
 Results so far (details and what changed after each run in `docs/EVALS.md`):
 
@@ -532,7 +540,7 @@ Every answer from the agent carries `assumptions`, `confidence` and `uncertainty
 ## 12. Status and next steps
 
 Built: data ingestion, scoring engine, time breakdowns, 5-tool agent with guardrails, API, chat
-page with agent-step view, trajectories, Redis cache, scores stored per scoring run, standardised index and tiers (also per month), scoring triggered by ingestion, alerts (monthly outlook + score change) safe under concurrency, Docker image and Render blueprint, 85 tests, 15-case eval set (run 7: 110/111).
+page with agent-step view, trajectories, Redis cache, scores stored per scoring run, standardised index and tiers (also per month), scoring triggered by ingestion, alerts (monthly outlook + score change) safe under concurrency, Docker image and Render blueprint, 89 tests with CI, 24-case eval set, 15-case eval set (run 7: 110/111).
 
 Next (in order): refresh `docs/ARCHITECTURE.md`; bonus: voice input
 (browser Web Speech API); live NWS alerts for storms in the coming days. Longer-term improvements (cost in
