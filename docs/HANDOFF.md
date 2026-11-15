@@ -28,6 +28,7 @@ Work started around 13:30 UTC on 2026-11-15; about 4 hours used so far.
 - The user works on **Windows, PowerShell 5.1**: `&&` does not work, so give one command per code block. They use `uv`.
 - **Anything that calls the Anthropic API or Open-Meteo runs on the user's laptop** (their `.env` holds `ANTHROPIC_API_KEY`). Give them exact commands and ask them to paste the output.
 - When the user asks, save explanations into `docs/` (e.g. `docs/DESIGN_DECISIONS.md`). Docs are in English.
+- **The UI targets desktop only** (user's decision): test at desktop size; no phone work. Existing small-screen CSS rules stay but are not maintained.
 - Commit and push directly to `main` on https://github.com/Omer212111/home-assignment-moveo after each change.
 
 ## 3. Cloud-session constraints (found by testing)
