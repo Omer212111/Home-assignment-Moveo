@@ -66,7 +66,7 @@ flowchart LR
     class SVC group
 ```
 
-How one chat question flows through the agent: [section 8](#8-architecture).
+How one chat question flows through the agent: [section 4](#4-the-agent).
 
 ---
 
@@ -343,65 +343,8 @@ The component diagram is at the top of this page ([Architecture at a glance](#ar
   question: SQLite is restored from the committed snapshot at startup, and the scores come from the
   active scoring run. The demo works when a public API is down, answers are fast, evals repeatable.
 
-### The agent loop: one chat question
-
-```mermaid
----
-config:
-  flowchart:
-    curve: basis
-    nodeSpacing: 35
-    rankSpacing: 35
-    wrappingWidth: 420
----
-flowchart TB
-    IN["<b>POST /chat</b> · question + session_id<br/>load the last 6 question/answer pairs (SQLite)"]
-    REQ["<b>1 · Build the request</b><br/>system prompt · history · question<br/>5 strict tool schemas + ModelAnswer schema (both from Pydantic)<br/>prompt cache · effort low · thinking summary"]
-    CALL["<b>2 · Call Claude Sonnet 5.5</b> · Messages API<br/>structured output · server-side refusal fallbacks"]
-    STOP{"stop_reason"}
-    RUN["<b>3 · Run the requested tools</b> (in parallel)<br/>validate arguments → invalid: error back to the model<br/>identical call in this question → served from cache"]
-    TOOLS["<b>Deterministic engine</b><br/>rank_hubs · explain_hub · compare_hubs · hub_breakdown · weather_stat<br/>results: numbers, pre-computed differences, caveats, method, scoring run"]
-    GUARD{"limit<br/>reached?"}
-    FORCE["<b>4 · Guardrail</b><br/>after 2 successful tool rounds, a round of only repeated calls,<br/>or on the 6th model call → next call with <b>tool_choice: none</b><br/>(tools stay defined, prompt cache intact)"]
-    VAL{"valid<br/>JSON?"}
-    RETRY["ask again with the<br/>validation error (once)"]
-    ATT["<b>5 · Attach engine data</b><br/>answer + assumptions + confidence + uncertainty + sources (from the model)<br/>+ ranking from rank_hubs, tool calls, tokens, trajectory (from the code)"]
-    OUT["<b>6 · Save and return</b><br/>turn → SQLite · trajectory → JSON file · AgentAnswer → the page"]
-    ERR["<b>502</b> with a readable message<br/>refusal · max_tokens · API error"]
-
-    IN --> REQ --> CALL --> STOP
-    STOP -- "tool_use" --> RUN --> TOOLS --> GUARD
-    GUARD -- "no" --> CALL
-    GUARD -- "yes" --> FORCE --> CALL
-    STOP -- "end_turn" --> VAL
-    VAL -- "no" --> RETRY --> CALL
-    VAL -- "yes" --> ATT --> OUT
-    STOP -- "refusal /<br/>max_tokens" --> ERR
-
-    classDef step fill:#fff4e5,stroke:#d9822b,color:#3d2a12
-    classDef llm fill:#fdecec,stroke:#c0504d,color:#3b1414
-    classDef tool fill:#eaf6ec,stroke:#3c9a52,color:#14301b
-    classDef io fill:#e8f1fb,stroke:#3b78c3,color:#13263d
-    classDef dec fill:#ffffff,stroke:#888,color:#333
-    class REQ,RUN,FORCE,RETRY,ATT step
-    class CALL,ERR llm
-    class TOOLS tool
-    class IN,OUT io
-    class STOP,GUARD,VAL dec
-```
-
-| Step | What happens | Code |
-|---|---|---|
-| 1 · Build the request | System prompt, the last 6 Q&A pairs, the question, 5 **strict** tool schemas and the `ModelAnswer` output schema, all generated from Pydantic. Prompt caching on. | `loop.py`, `schemas.py`, `prompts.py` |
-| 2 · Call Claude | Sonnet 5.5, effort low, thinking summary for the "Agent steps" view; refusals retried on a fallback model by the API. | `loop.py::_call_model` |
-| 3 · Run the tools | Arguments validated again with Pydantic (a city that is not a hub, season *and* months: error back to the model, which may correct it). Identical repeats served from a cache. | `tools.py::run_tool` |
-| Engine | Tools read the active scoring run and return numbers with pre-computed differences and counts, caveats, the method and the scoring run id. The model never does arithmetic. | `tools.py`, `scoring/` |
-| 4 · Guardrails | At most 2 successful tool rounds; a round of only repeated calls, or the 6th model call, forces the answer with `tool_choice: none`. | `loop.py::_run` |
-| 5 · Validate and attach | The answer must match `ModelAnswer` (one retry). The server then attaches the ranking from the engine, not from the model's text. | `loop.py`, `schemas.py::AgentAnswer` |
-| 6 · Save and return | The turn goes to SQLite (conversation memory), the step-by-step trajectory to a JSON file, the `AgentAnswer` to the page. | `main.py`, `trajectory.py` |
-
-More diagrams: `docs/ARCHITECTURE.md`, `docs/DATA_MODEL.md`. PNG/SVG exports in `docs/img/`
-(`architecture-agent-1`, `architecture-agent-2`).
+More diagrams: `docs/ARCHITECTURE.md`, `docs/DATA_MODEL.md`. PNG/SVG export of the diagram above:
+`docs/img/architecture-agent-1`.
 
 ---
 
