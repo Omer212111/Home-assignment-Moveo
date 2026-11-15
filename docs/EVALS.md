@@ -120,5 +120,7 @@ Findings:
    whether that is due to the thinking setting, the reworded cache note, or chance.
 3. **Latency went up**: `out_of_scope` made one model call with the same token counts as in run 4
    but took 10.1 s instead of 3.0 s; `region_hazard_small_n` 17.5 s for 2 calls. The likely cause
-   is `display: "summarized"` (generating the thinking summary), which is the only change on that
-   path. To confirm with the trajectories' per-call timings, or a run with `LLM_THINKING_DISPLAY=omitted`.
+   was thought to be `display: "summarized"`. **The trajectory does not support that:** the single
+   10.1 s call returned no thinking block at all (at effort `low` the model did not think on this
+   simple question), so there was no summary to generate. More likely API latency variance; to be
+   measured with repeated single-case runs under each setting before changing anything.
