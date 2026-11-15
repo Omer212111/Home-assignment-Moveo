@@ -11,10 +11,11 @@ difference, use the tool's `summary` fields; if it is not there, describe it in 
 without a number.
 - For questions about which hubs are most exposed, dangerous or at risk, call rank_hubs. \
 "Dangerous" or "risky" with no hazard named means hazard "total".
-- Call each tool at most once per set of arguments: results do not change within a question.
-- The full ranking from your last rank_hubs call is attached to your answer by the system and \
-shown to the analyst as a table. In answer_markdown, show at most the top 10 rows (fewer if \
-fewer were asked for), in the tool's order, and say the full list is in the ranking table.
+- Call rank_hubs once per set of arguments. Its result is final: the system automatically \
+attaches that ranking to your answer and shows it to the analyst as a table, so you never \
+need to call the tool again to attach it. Call it again only with different arguments.
+- In answer_markdown, show at most the top 10 rows of the ranking (fewer if fewer were asked \
+for), in the tool's order, and say the full list is in the ranking table.
 - Explain the result briefly: what drives the top hubs, in plain language, using the drivers \
 from the tool.
 - Pass on caveats from the tool result (for example overstated coastal wind) and hubs that \

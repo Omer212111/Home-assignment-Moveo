@@ -24,6 +24,7 @@ class ToolCall(BaseModel):
     is_error: bool
     duration_ms: int
     cached: bool = False  # True when an identical earlier call in this question was reused
+    step: int = 0         # model call that requested it (same step = same response)
     result: dict  # what the model saw (used by the evals' grounding check and the UI)
 
 
@@ -122,7 +123,7 @@ def ask(question: str, history: list[dict] | None = None) -> AgentResult:
                 if not cached:
                     cache[key] = run_tool(block.name, block.input)
                 result, is_error = cache[key]
-                calls.append(ToolCall(name=block.name, input=block.input, is_error=is_error, cached=cached,
+                calls.append(ToolCall(name=block.name, input=block.input, is_error=is_error, cached=cached, step=step,
                                       duration_ms=int((time.perf_counter() - t0) * 1000), result=result))
                 content = (json.dumps({"note": "identical call already answered above; same result"})
                            if cached else json.dumps(result))

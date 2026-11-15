@@ -92,16 +92,25 @@ def main(argv=None):
             checks = check_turn(result, turn.get("expect", {}), user_texts)
             n_checks += len(checks)
             n_failed += sum(1 for _, err in checks if err)
-            print(f"  turn {i}: \"{q}\"  ({secs:.1f}s, {result.input_tokens}+{result.output_tokens} tokens, "
-                  f"tools: {[ (c.name, c.input) for c in result.tool_calls ] or 'none'})")
+            print(f"  turn {i}: \"{q}\"  ({secs:.1f}s, {result.steps} model calls, "
+                  f"{result.input_tokens}+{result.output_tokens} tokens)")
+            for c in result.tool_calls:
+                print(f"      tool @ model call {c.step}: {c.name}({json.dumps(c.input)})"
+                      f"{'  [CACHED duplicate]' if c.cached else ''}{'  [ERROR]' if c.is_error else ''}")
+            if not result.tool_calls:
+                print("      tools: none")
             for name, err in checks:
                 print(f"    {'PASS' if not err else 'FAIL'}  {name}{'' if not err else '  -> ' + err}")
             entry.update(seconds=round(secs, 1), checks={n: e for n, e in checks}, answer=result.answer.model_dump(),
-                         tool_calls=[{"name": c.name, "input": c.input} for c in result.tool_calls])
+                         steps=result.steps, tokens=[result.input_tokens, result.output_tokens],
+                         tool_calls=[{"name": c.name, "input": c.input, "step": c.step, "cached": c.cached,
+                                      "is_error": c.is_error} for c in result.tool_calls])
             report.append(entry)
             history += [{"role": "user", "content": q}, {"role": "assistant", "content": result.answer.model_dump_json()}]
         print()
 
+    dupes = sum(1 for e in report for c in e.get("tool_calls", []) if c["cached"])
+    print(f"duplicate tool calls (served from cache): {dupes}")
     cost = tok_in / 1e6 * PRICE_IN + tok_out / 1e6 * PRICE_OUT
     print(f"RESULT: {n_checks - n_failed}/{n_checks} checks passed; "
           f"{tok_in}+{tok_out} tokens, ~${cost:.2f} (list-price estimate)")

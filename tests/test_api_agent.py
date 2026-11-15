@@ -210,6 +210,7 @@ def test_identical_tool_calls_are_served_from_cache(api, monkeypatch):
     monkeypatch.setattr(loop, "client", lambda: fake)
     res = loop.ask("top 10?")
     assert [c.cached for c in res.tool_calls] == [False, True]
+    assert [c.step for c in res.tool_calls] == [1, 1]          # both requested in the same response
     sent = fake.requests[1]["messages"][-1]["content"]
     assert len(sent) == 2 and "already answered" in sent[1]["content"]   # every tool_use gets a result
 
