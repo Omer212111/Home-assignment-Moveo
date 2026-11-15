@@ -1,0 +1,60 @@
+# Distribution hubs = the 50 most populous US cities (Census 2023 city estimates).
+#
+# ASSUMPTIONS (documented in README):
+# - The company did not provide its hub list, so one hub per top-50 city is assumed.
+# - The hub location is the city centre. For cities that span several counties,
+#   county_fips is the county containing that point (it is used to join FEMA data).
+# - Ranks ~#48-52 are within a few thousand residents of each other, so the
+#   cut-off at 50 is approximate.
+# - region = US Census Bureau region, so "Midwest" has a precise meaning.
+hubs:
+  - {id: new_york,         city: New York,         state: NY, lat: 40.7128, lon: -74.0060,  county_fips: "36061", region: Northeast, pop_rank: 1}
+  - {id: los_angeles,      city: Los Angeles,      state: CA, lat: 34.0522, lon: -118.2437, county_fips: "06037", region: West,      pop_rank: 2}
+  - {id: chicago,          city: Chicago,          state: IL, lat: 41.8781, lon: -87.6298,  county_fips: "17031", region: Midwest,   pop_rank: 3}
+  - {id: houston,          city: Houston,          state: TX, lat: 29.7604, lon: -95.3698,  county_fips: "48201", region: South,     pop_rank: 4}
+  - {id: phoenix,          city: Phoenix,          state: AZ, lat: 33.4484, lon: -112.0740, county_fips: "04013", region: West,      pop_rank: 5}
+  - {id: philadelphia,     city: Philadelphia,     state: PA, lat: 39.9526, lon: -75.1652,  county_fips: "42101", region: Northeast, pop_rank: 6}
+  - {id: san_antonio,      city: San Antonio,      state: TX, lat: 29.4241, lon: -98.4936,  county_fips: "48029", region: South,     pop_rank: 7}
+  - {id: san_diego,        city: San Diego,        state: CA, lat: 32.7157, lon: -117.1611, county_fips: "06073", region: West,      pop_rank: 8}
+  - {id: dallas,           city: Dallas,           state: TX, lat: 32.7767, lon: -96.7970,  county_fips: "48113", region: South,     pop_rank: 9}
+  - {id: jacksonville,     city: Jacksonville,     state: FL, lat: 30.3322, lon: -81.6557,  county_fips: "12031", region: South,     pop_rank: 10}
+  - {id: austin,           city: Austin,           state: TX, lat: 30.2672, lon: -97.7431,  county_fips: "48453", region: South,     pop_rank: 11}
+  - {id: fort_worth,       city: Fort Worth,       state: TX, lat: 32.7555, lon: -97.3308,  county_fips: "48439", region: South,     pop_rank: 12}
+  - {id: san_jose,         city: San Jose,         state: CA, lat: 37.3382, lon: -121.8863, county_fips: "06085", region: West,      pop_rank: 13}
+  - {id: columbus,         city: Columbus,         state: OH, lat: 39.9612, lon: -82.9988,  county_fips: "39049", region: Midwest,   pop_rank: 14}
+  - {id: charlotte,        city: Charlotte,        state: NC, lat: 35.2271, lon: -80.8431,  county_fips: "37119", region: South,     pop_rank: 15}
+  - {id: indianapolis,     city: Indianapolis,     state: IN, lat: 39.7684, lon: -86.1581,  county_fips: "18097", region: Midwest,   pop_rank: 16}
+  - {id: san_francisco,    city: San Francisco,    state: CA, lat: 37.7749, lon: -122.4194, county_fips: "06075", region: West,      pop_rank: 17}
+  - {id: seattle,          city: Seattle,          state: WA, lat: 47.6062, lon: -122.3321, county_fips: "53033", region: West,      pop_rank: 18}
+  - {id: denver,           city: Denver,           state: CO, lat: 39.7392, lon: -104.9903, county_fips: "08031", region: West,      pop_rank: 19}
+  - {id: oklahoma_city,    city: Oklahoma City,    state: OK, lat: 35.4676, lon: -97.5164,  county_fips: "40109", region: South,     pop_rank: 20}
+  - {id: nashville,        city: Nashville,        state: TN, lat: 36.1627, lon: -86.7816,  county_fips: "47037", region: South,     pop_rank: 21}
+  - {id: washington_dc,    city: Washington,       state: DC, lat: 38.9072, lon: -77.0369,  county_fips: "11001", region: South,     pop_rank: 22}
+  - {id: el_paso,          city: El Paso,          state: TX, lat: 31.7619, lon: -106.4850, county_fips: "48141", region: South,     pop_rank: 23}
+  - {id: las_vegas,        city: Las Vegas,        state: NV, lat: 36.1699, lon: -115.1398, county_fips: "32003", region: West,      pop_rank: 24}
+  - {id: boston,           city: Boston,           state: MA, lat: 42.3601, lon: -71.0589,  county_fips: "25025", region: Northeast, pop_rank: 25}
+  - {id: detroit,          city: Detroit,          state: MI, lat: 42.3314, lon: -83.0458,  county_fips: "26163", region: Midwest,   pop_rank: 26}
+  - {id: portland,         city: Portland,         state: OR, lat: 45.5152, lon: -122.6784, county_fips: "41051", region: West,      pop_rank: 27}
+  - {id: louisville,       city: Louisville,       state: KY, lat: 38.2527, lon: -85.7585,  county_fips: "21111", region: South,     pop_rank: 28}
+  - {id: memphis,          city: Memphis,          state: TN, lat: 35.1495, lon: -90.0490,  county_fips: "47157", region: South,     pop_rank: 29}
+  - {id: baltimore,        city: Baltimore,        state: MD, lat: 39.2904, lon: -76.6122,  county_fips: "24510", region: South,     pop_rank: 30}
+  - {id: milwaukee,        city: Milwaukee,        state: WI, lat: 43.0389, lon: -87.9065,  county_fips: "55079", region: Midwest,   pop_rank: 31}
+  - {id: albuquerque,      city: Albuquerque,      state: NM, lat: 35.0844, lon: -106.6504, county_fips: "35001", region: West,      pop_rank: 32}
+  - {id: tucson,           city: Tucson,           state: AZ, lat: 32.2226, lon: -110.9747, county_fips: "04019", region: West,      pop_rank: 33}
+  - {id: fresno,           city: Fresno,           state: CA, lat: 36.7378, lon: -119.7871, county_fips: "06019", region: West,      pop_rank: 34}
+  - {id: sacramento,       city: Sacramento,       state: CA, lat: 38.5816, lon: -121.4944, county_fips: "06067", region: West,      pop_rank: 35}
+  - {id: mesa,             city: Mesa,             state: AZ, lat: 33.4152, lon: -111.8315, county_fips: "04013", region: West,      pop_rank: 36}
+  - {id: atlanta,          city: Atlanta,          state: GA, lat: 33.7490, lon: -84.3880,  county_fips: "13121", region: South,     pop_rank: 37}
+  - {id: kansas_city,      city: Kansas City,      state: MO, lat: 39.0997, lon: -94.5786,  county_fips: "29095", region: Midwest,   pop_rank: 38}
+  - {id: colorado_springs, city: Colorado Springs, state: CO, lat: 38.8339, lon: -104.8214, county_fips: "08041", region: West,      pop_rank: 39}
+  - {id: omaha,            city: Omaha,            state: NE, lat: 41.2565, lon: -95.9345,  county_fips: "31055", region: Midwest,   pop_rank: 40}
+  - {id: raleigh,          city: Raleigh,          state: NC, lat: 35.7796, lon: -78.6382,  county_fips: "37183", region: South,     pop_rank: 41}
+  - {id: long_beach,       city: Long Beach,       state: CA, lat: 33.7701, lon: -118.1937, county_fips: "06037", region: West,      pop_rank: 42}
+  - {id: virginia_beach,   city: Virginia Beach,   state: VA, lat: 36.8529, lon: -75.9780,  county_fips: "51810", region: South,     pop_rank: 43}
+  - {id: miami,            city: Miami,            state: FL, lat: 25.7617, lon: -80.1918,  county_fips: "12086", region: South,     pop_rank: 44}
+  - {id: oakland,          city: Oakland,          state: CA, lat: 37.8044, lon: -122.2712, county_fips: "06001", region: West,      pop_rank: 45}
+  - {id: minneapolis,      city: Minneapolis,      state: MN, lat: 44.9778, lon: -93.2650,  county_fips: "27053", region: Midwest,   pop_rank: 46}
+  - {id: tulsa,            city: Tulsa,            state: OK, lat: 36.1540, lon: -95.9928,  county_fips: "40143", region: South,     pop_rank: 47}
+  - {id: bakersfield,      city: Bakersfield,      state: CA, lat: 35.3733, lon: -119.0187, county_fips: "06029", region: West,      pop_rank: 48}
+  - {id: tampa,            city: Tampa,            state: FL, lat: 27.9506, lon: -82.4572,  county_fips: "12057", region: South,     pop_rank: 49}
+  - {id: arlington_tx,     city: Arlington,        state: TX, lat: 32.7357, lon: -97.1081,  county_fips: "48439", region: South,     pop_rank: 50}

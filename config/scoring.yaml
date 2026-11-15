@@ -1,0 +1,75 @@
+# Deterministic Structural Exposure Score (0-100) for each hub.
+#
+# How it works:
+#   component score = min(value / cap, 1) * 100           (fixed caps, not ranks across hubs,
+#                                                          so a hub's score does not move when
+#                                                          other hubs are added)
+#   hazard score    = weighted average of its components
+#   composite       = sum(hazard weight * hazard score)
+#
+# Weights and caps are expert judgment, NOT fitted to loss data (assumption).
+# This is the file an analyst edits to change the business definition of risk;
+# its hash is stored with every score as `scoring_version`.
+
+thresholds:
+  snow_day_cm: 1.0          # a "snow day" = at least 1 cm of new snow
+  heavy_snow_cm: 10.0       # heavy snow = road and yard closures likely
+  extreme_cold_c: -18.0     # ~0 F: equipment, fuel gelling, worker safety
+  heavy_precip_mm: 50.0     # ~2 in/day: flash-flood territory
+  high_gust_kmh: 75.0       # ~47 mph: trailers, doors and dock work stop
+  extreme_heat_c: 38.0      # ~100 F: labour limits, reefer and equipment stress
+  freezing_rain_codes: [56, 57, 66, 67]   # WMO weather codes for freezing drizzle / rain
+
+# FEMA incident types -> our hazards. Biological (COVID), Fire, Earthquake etc. are excluded.
+declaration_incident_types:
+  winter_declarations: [Snowstorm, Severe Ice Storm, Winter Storm, Freezing]
+  tropical_declarations: [Hurricane, Tropical Storm, Typhoon, Coastal Storm]
+  flood_declarations: [Flood, Dam/Levee Break]
+  severe_storm_declarations: [Severe Storm, Tornado]
+
+# Only Major Disaster (DR) declarations count. Found in the data: inland Dallas and
+# Fort Worth have 5 hurricane-related declarations each, 4 of them EM (emergency
+# support, mostly sheltering evacuees) and only 1 DR (Harvey). Counting EM would
+# rate Dallas as hurricane-exposed.
+declaration_types_counted: [DR]
+
+hazards:
+  winter:
+    label: Winter storms, snow and ice
+    weight: 0.25
+    components:
+      - {name: snow_day_pct,        source: metric, cap: 25,  weight: 0.30, description: "% of days with >=1 cm new snow"}
+      - {name: heavy_snow_days,     source: metric, cap: 6,   weight: 0.25, description: "days/yr with >=10 cm new snow"}
+      - {name: extreme_cold_days,   source: metric, cap: 20,  weight: 0.15, description: "days/yr with min temp <= -18 C"}
+      - {name: freezing_rain_days,  source: metric, cap: 5,   weight: 0.10, description: "days/yr with freezing drizzle/rain"}
+      - {name: winter_declarations, source: declarations, cap: 4, weight: 0.20, description: "FEMA major-disaster winter declarations, 20 yrs"}
+  tropical:
+    label: Hurricanes and tropical storms
+    weight: 0.20
+    components:
+      # Slice 1 uses declarations only; slice 2 adds the FEMA National Risk Index (modelled
+      # hurricane frequency), because 5 years of weather observations is too short for rare events.
+      - {name: tropical_declarations, source: declarations, cap: 6, weight: 1.0, description: "FEMA major-disaster hurricane/tropical declarations, 20 yrs"}
+  flood:
+    label: Flooding and extreme rain
+    weight: 0.25
+    components:
+      - {name: heavy_precip_days,  source: metric, cap: 4, weight: 0.5, description: "days/yr with >=50 mm precipitation"}
+      - {name: flood_declarations, source: declarations, cap: 4, weight: 0.5, description: "FEMA major-disaster flood declarations, 20 yrs"}
+  severe_storm:
+    label: Severe storms, tornadoes and high wind
+    weight: 0.15
+    components:
+      - {name: high_gust_days,            source: metric, cap: 15, weight: 0.4, description: "days/yr with wind gusts >=75 km/h"}
+      - {name: severe_storm_declarations, source: declarations, cap: 8, weight: 0.6, description: "FEMA major-disaster severe storm/tornado declarations, 20 yrs"}
+  heat:
+    label: Extreme heat
+    weight: 0.15
+    components:
+      - {name: extreme_heat_days, source: metric, cap: 60, weight: 1.0, description: "days/yr with max temp >=38 C"}
+
+tiers:
+  - {name: Severe,   min_score: 60}
+  - {name: High,     min_score: 40}
+  - {name: Moderate, min_score: 20}
+  - {name: Low,      min_score: 0}

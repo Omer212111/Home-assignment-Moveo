@@ -1,0 +1,6 @@
+.venv/
+__pycache__/
+.pytest_cache/
+.env
+# The SQLite file is rebuilt from data/snapshot/ - the snapshot and raw responses are committed.
+data/*.db
