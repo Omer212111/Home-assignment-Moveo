@@ -188,3 +188,9 @@ def test_chat_returns_502_with_message_on_api_error(api, monkeypatch):
     monkeypatch.setattr(loop, "client", lambda: fake)
     r = api.post("/chat", json={"message": "hi"})
     assert r.status_code == 502 and "rejected the key" in r.json()["detail"]
+
+
+def test_index_serves_chat_ui(api):
+    r = api.get("/")
+    assert r.status_code == 200 and "text/html" in r.headers["content-type"]
+    assert 'fetch("/chat"' in r.text
