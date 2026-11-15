@@ -15,6 +15,7 @@ from pathlib import Path
 
 import yaml
 
+from app.agent import trajectory
 from app.agent.loop import AgentError, ask
 from app.scoring import service
 from app.settings import settings
@@ -105,6 +106,8 @@ def main(argv=None):
                          steps=result.steps, tokens=[result.input_tokens, result.output_tokens],
                          tool_calls=[{"name": c.name, "input": c.input, "step": c.step, "cached": c.cached,
                                       "is_error": c.is_error} for c in result.tool_calls])
+            # One readable trajectory per turn: print with `uv run python -m app.agent.trajectory <file>`.
+            trajectory.save(q, case["id"], result, HERE / "trajectories", f"{case['id']}_turn{i}")
             report.append(entry)
             history += [{"role": "user", "content": q}, {"role": "assistant", "content": result.answer.model_dump_json()}]
         print()
@@ -119,6 +122,7 @@ def main(argv=None):
         "checks": n_checks, "failed": n_failed, "tokens": [tok_in, tok_out], "turns": report,
     }, indent=2, default=str), encoding="utf-8")
     print(f"report: {HERE / 'report.json'}")
+    print(f"trajectories: {HERE / 'trajectories'} (view: uv run python -m app.agent.trajectory <file>)")
     sys.exit(1 if n_failed else 0)
 
 

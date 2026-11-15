@@ -34,7 +34,7 @@
   /* chat */
   #chat { display: flex; flex-direction: column; }
   #messages { flex: 1; overflow-y: auto; padding: 16px; display: flex; flex-direction: column; gap: 12px; }
-  .msg { max-width: 88%; padding: 10px 14px; border-radius: 12px; overflow-wrap: anywhere; }
+  .msg { flex-shrink: 0; max-width: 88%; padding: 10px 14px; border-radius: 12px; overflow-wrap: anywhere; }
   .msg.user { align-self: flex-end; background: var(--user); color: var(--user-text); }
   .msg.bot { align-self: flex-start; background: var(--accent-soft); }
   .msg.error { align-self: flex-start; background: var(--warn-bg); color: var(--warn); }
@@ -44,6 +44,17 @@
   .msg p { margin: 0 0 8px; } .msg p:last-child { margin-bottom: 0; }
   .msg ul { margin: 4px 0 8px; padding-left: 20px; }
   .typing { color: var(--muted); font-style: italic; }
+  .actions { display: flex; align-items: center; gap: 12px; }
+  .toggle { font-size: 13px; color: var(--muted); display: flex; align-items: center; gap: 6px; cursor: pointer; white-space: nowrap; }
+  /* Agent steps: a timeline under each bot answer, shown only when the header switch is on */
+  .steps { display: none; flex-shrink: 0; align-self: flex-start; max-width: 88%; font-size: 12.5px; border-left: 2px solid var(--border);
+           padding: 2px 0 2px 12px; margin: -6px 0 0 8px; color: var(--muted); }
+  body.show-steps .steps { display: block; }
+  .steps summary { font-size: 12.5px; }
+  .step { margin: 6px 0; overflow-wrap: anywhere; }
+  .step b { color: var(--text); font-weight: 600; }
+  .step .think { font-style: italic; white-space: pre-wrap; }
+  .step code { font-size: 12px; }
   #examples { display: flex; flex-wrap: wrap; gap: 8px; padding: 0 16px 10px; }
   #examples button { border: 1px solid var(--border); background: var(--bg); color: var(--text);
                      border-radius: 999px; padding: 4px 12px; font-size: 13px; }
@@ -76,6 +87,10 @@
     #chat { height: 70vh; }
     header { padding: 10px 16px; }
     header .sub { display: none; }
+    header h1 { white-space: nowrap; }
+    body.started #examples { display: none; }  /* after the first question, the phone's height goes to the chat */
+    .actions { gap: 8px; }
+    .actions .ghost { padding: 6px 8px; font-size: 13px; }
     .barcell { display: none; }          /* the numbers stay; the bars need width a phone does not have */
     .rank td, .rank th { padding: 6px 4px; }
   }
@@ -87,7 +102,10 @@
     <h1>Hub Weather Risk</h1>
     <div class="sub">Expected disruption days per year for 50 distribution hubs - ask in plain language</div>
   </div>
-  <button class="ghost" id="newChat" type="button">New conversation</button>
+  <div class="actions">
+    <label class="toggle"><input type="checkbox" id="showSteps"> Agent steps</label>
+    <button class="ghost" id="newChat" type="button">New conversation</button>
+  </div>
 </header>
 <main>
   <section class="card" id="chat" aria-label="Chat">
@@ -205,10 +223,47 @@ function renderDetails(res) {
   $("details").innerHTML = html;
 }
 
+// The agent's trajectory (from the API): what it thought, which tools it called, what came back.
+function addSteps(res) {
+  const events = res.trajectory || [];
+  if (!events.length) return;
+  const row = e => {
+    if (e.type === "model_call") {
+      const head = `<div class="step"><b>Model call ${e.step}</b> - ${(e.duration_ms / 1000).toFixed(1)} s, `
+                 + `${e.input_tokens} + ${e.output_tokens} tokens</div>`;
+      return head + e.blocks.map(b =>
+        b.type === "thinking" ? `<div class="step think">Thinks: ${esc(b.text)}</div>`
+        : b.type === "tool_use" ? `<div class="step">Calls <code>${esc(b.name)}(${esc(JSON.stringify(b.input))})</code></div>`
+        : b.type === "text" ? (e.stop_reason === "end_turn" ? `<div class="step">Writes the answer (structured JSON)</div>`
+                                                           : `<div class="step">Says: ${esc(b.text)}</div>`)
+        : `<div class="step">[${esc(b.type)}]</div>`).join("");
+    }
+    if (e.type === "tool_result")
+      return `<div class="step">&rarr; <code>${esc(e.name)}</code>${e.cached ? " (repeated call, from cache)" : ""}`
+           + `${e.is_error ? " <b>error</b>" : ""}: ${esc(e.summary)}</div>`;
+    if (e.type === "schema_retry") return `<div class="step"><b>Answer did not match the schema - asked again</b></div>`;
+    if (e.type === "final_answer") return `<div class="step"><b>Answer accepted</b> (confidence ${esc(e.confidence)})</div>`;
+    return "";
+  };
+  const calls = events.filter(e => e.type === "model_call").length;
+  const div = addMessage("steps", `<details><summary>Agent steps: ${calls} model call${calls === 1 ? "" : "s"}, `
+    + `${events.filter(e => e.type === "tool_result").length} tool call(s)</summary>${events.map(row).join("")}</details>`);
+  div.classList.remove("msg");
+}
+
+// "Show agent steps" switch, remembered per browser (a convenience only, so failures are ignored).
+try { $("showSteps").checked = localStorage.getItem("showSteps") === "1"; } catch (e) {}
+document.body.classList.toggle("show-steps", $("showSteps").checked);
+$("showSteps").addEventListener("change", e => {
+  document.body.classList.toggle("show-steps", e.target.checked);
+  try { localStorage.setItem("showSteps", e.target.checked ? "1" : "0"); } catch (err) {}
+});
+
 async function send(question) {
   question = question.trim();
   if (!question) return;
   addMessage("user", esc(question));
+  document.body.classList.add("started");
   $("input").value = "";
   $("send").disabled = true;
   const typing = addMessage("bot typing", "Thinking...");
@@ -226,6 +281,7 @@ async function send(question) {
     }
     sessionId = body.session_id;
     addMessage("bot", md(body.result.answer.answer_markdown));
+    addSteps(body.result);
     renderDetails(body.result);
   } catch (err) {
     typing.remove();
@@ -243,6 +299,7 @@ $("input").addEventListener("keydown", e => {
 $("examples").addEventListener("click", e => { if (e.target.tagName === "BUTTON") send(e.target.textContent); });
 $("newChat").addEventListener("click", () => {
   sessionId = null;
+  document.body.classList.remove("started");
   $("messages").innerHTML = '<div class="msg bot">New conversation started.</div>';
   $("details").innerHTML = '<h2>Answer details</h2><p class="empty">The ranking, confidence, assumptions and sources of the latest answer appear here.</p>';
 });

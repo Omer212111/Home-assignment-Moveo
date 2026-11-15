@@ -11,6 +11,7 @@ from pydantic import BaseModel, ValidationError
 
 from app.agent.prompts import SYSTEM_PROMPT
 from app.agent.schemas import AgentAnswer, ModelAnswer, RankedHub
+from app.agent import trajectory as traj
 from app.agent.tools import run_tool, tool_definitions
 from app.settings import settings
 
@@ -35,6 +36,7 @@ class AgentResult(BaseModel):
     steps: int
     input_tokens: int
     output_tokens: int
+    trajectory: list[dict] = []  # step-by-step events, see app/agent/trajectory.py
 
 
 class AgentError(RuntimeError):
@@ -70,6 +72,7 @@ def _call_model(messages: list) -> object:
             tools=tool_definitions(),
             output_format=ModelAnswer,
             output_config={"effort": settings.llm_effort},
+            thinking={"type": "adaptive", "display": settings.llm_thinking_display},
             betas=[FALLBACK_BETA],
             fallbacks="default",  # if the model declines, the API retries on a fallback model
         )
@@ -98,11 +101,14 @@ def ask(question: str, history: list[dict] | None = None) -> AgentResult:
     tokens_in = tokens_out = 0
     retried_schema = False
     cache: dict[tuple[str, str], tuple[dict, bool]] = {}
+    events: list[dict] = []
 
     for step in range(1, MAX_STEPS + 1):
+        t_call = time.perf_counter()
         response = _call_model(messages)
         tokens_in += response.usage.input_tokens
         tokens_out += response.usage.output_tokens
+        events.append(traj.model_call_event(step, response, int((time.perf_counter() - t_call) * 1000)))
 
         if response.stop_reason == "refusal":
             raise AgentError("The model declined to answer this request.")
@@ -125,6 +131,9 @@ def ask(question: str, history: list[dict] | None = None) -> AgentResult:
                 result, is_error = cache[key]
                 calls.append(ToolCall(name=block.name, input=block.input, is_error=is_error, cached=cached, step=step,
                                       duration_ms=int((time.perf_counter() - t0) * 1000), result=result))
+                events.append({"type": "tool_result", "step": step, "name": block.name, "input": block.input,
+                               "cached": cached, "is_error": is_error, "duration_ms": calls[-1].duration_ms,
+                               "summary": traj.result_summary(block.name, result, is_error)})
                 content = (json.dumps({"note": "identical call already answered above; same result"})
                            if cached else json.dumps(result))
                 results.append({"type": "tool_result", "tool_use_id": block.id,
@@ -141,11 +150,13 @@ def ask(question: str, history: list[dict] | None = None) -> AgentResult:
             if retried_schema:
                 raise AgentError(f"Answer did not match the schema after a retry: {exc}") from exc
             retried_schema = True
+            events.append({"type": "schema_retry", "step": step, "error": str(exc)})
             messages.append({"role": "assistant", "content": response.content})
             messages.append({"role": "user", "content":
                              f"Your answer did not match the required JSON schema: {exc}. Answer again."})
             continue
+        events.append({"type": "final_answer", "step": step, "confidence": answer.confidence})
         return AgentResult(answer=answer, tool_calls=calls, model=response.model, steps=step,
-                           input_tokens=tokens_in, output_tokens=tokens_out)
+                           input_tokens=tokens_in, output_tokens=tokens_out, trajectory=events)
 
     raise AgentError(f"No final answer after {MAX_STEPS} model calls.")

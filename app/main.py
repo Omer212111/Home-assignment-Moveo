@@ -14,6 +14,7 @@ from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 
 from app import db
+from app.agent import trajectory
 from app.agent.loop import AgentError, AgentResult, ask
 from app.agent.schemas import Hazard, Region
 from app.scoring import service
@@ -102,4 +103,8 @@ def chat(req: ChatRequest):
         log.exception("unexpected error in /chat")
         raise HTTPException(500, f"Unexpected error: {type(exc).__name__}: {exc}") from exc
     _save(session_id, req.message, result.answer.model_dump_json())
+    try:  # a trajectory file is a debugging aid: never fail the answer because of it
+        trajectory.save(req.message, session_id, result)
+    except OSError as exc:
+        log.warning("could not save trajectory: %s", exc)
     return ChatResponse(session_id=session_id, result=result)

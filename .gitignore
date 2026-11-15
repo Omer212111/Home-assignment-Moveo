@@ -4,3 +4,5 @@ __pycache__/
 .env
 # The SQLite file is rebuilt from data/snapshot/ - the snapshot and raw responses are committed.
 data/*.db
+# Agent trajectories of chat questions (local debugging; eval trajectories live in evals/)
+data/trajectories/

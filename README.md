@@ -14,4 +14,5 @@ Open http://127.0.0.1:8000/ for the chat, http://127.0.0.1:8000/docs for the API
 The chat needs `ANTHROPIC_API_KEY` in a `.env` file in the repository root.
 
 - Tests (offline): `uv run pytest -q`
-- Agent evals (real API calls): `uv run python -m evals.run`
+- Agent evals (real API calls): `uv run python -m evals.run` (one trajectory per turn in `evals/trajectories/`)
+- How the agent thought on the last chat question: `uv run python -m app.agent.trajectory` (or tick "Agent steps" in the chat)

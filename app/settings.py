@@ -12,6 +12,9 @@ class Settings(BaseSettings):
     # LLM
     llm_model: str = "claude-sonnet-5-5"  # cheaper than Opus 5.5; reliable tool use + JSON schema
     llm_effort: str = "low"  # chat latency matters more than deep reasoning here; tools do the maths
+    # "summarized" returns a readable summary of the model's thinking (for trajectories and the UI);
+    # "omitted" (the API default) returns empty thinking blocks. Billing is the same either way.
+    llm_thinking_display: str = "summarized"
     # API key: read from .env or the environment. AGENT_ANTHROPIC_API_KEY wins, so a hosted
     # environment can set the agent's key without touching a tool's own ANTHROPIC_API_KEY.
     agent_anthropic_api_key: str | None = None
@@ -21,6 +24,7 @@ class Settings(BaseSettings):
     db_path: Path = ROOT / "data" / "weather_risk.db"
     snapshot_dir: Path = ROOT / "data" / "snapshot"
     raw_cache_dir: Path = ROOT / "data" / "raw"
+    trajectory_dir: Path = ROOT / "data" / "trajectories"  # one JSON per chat question (git-ignored)
 
     # Config files
     hubs_file: Path = ROOT / "config" / "hubs.yaml"

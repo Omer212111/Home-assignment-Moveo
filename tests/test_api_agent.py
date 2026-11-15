@@ -218,3 +218,33 @@ def test_identical_tool_calls_are_served_from_cache(api, monkeypatch):
 def test_no_tool_call_means_no_ranking(api, monkeypatch):
     monkeypatch.setattr(loop, "client", lambda: FakeClient([_msg("end_turn", _text(_answer(confidence="low")))]))
     assert loop.ask("weather in Paris?").answer.ranking is None
+
+
+def test_trajectory_records_thinking_tools_and_answer(api, monkeypatch):
+    from app.agent import trajectory
+    thinking = SimpleNamespace(type="thinking", thinking="The user asks for the riskiest hubs; use rank_hubs.")
+    fake = FakeClient([
+        _msg("tool_use", thinking, _tool_use("rank_hubs", {"hazard": "total", "region": None, "top_n": 3})),
+        _msg("end_turn", _text(_answer())),
+    ])
+    monkeypatch.setattr(loop, "client", lambda: fake)
+    res = loop.ask("Which hubs are most dangerous?")
+    assert fake.requests[0]["thinking"] == {"type": "adaptive", "display": "summarized"}
+    assert [e["type"] for e in res.trajectory] == ["model_call", "tool_result", "model_call", "final_answer"]
+    first = res.trajectory[0]["blocks"]
+    assert first[0] == {"type": "thinking", "text": "The user asks for the riskiest hubs; use rank_hubs."}
+    assert first[1]["type"] == "tool_use" and first[1]["name"] == "rank_hubs"
+    assert res.trajectory[1]["summary"].startswith("3 hubs ranked")
+    # saved file renders as a readable timeline
+    path = trajectory.save("Which hubs are most dangerous?", "abc12345", res)
+    text = trajectory.render(json.loads(path.read_text(encoding="utf-8")))
+    assert "thinks: The user asks" in text and "calls:  rank_hubs" in text and "[answer] confidence medium" in text
+
+
+def test_chat_returns_and_saves_trajectory(api, monkeypatch):
+    from app.settings import settings
+    fake = FakeClient([_msg("end_turn", _text(_answer()))])
+    monkeypatch.setattr(loop, "client", lambda: fake)
+    body = api.post("/chat", json={"message": "hello"}).json()
+    assert body["result"]["trajectory"][-1]["type"] == "final_answer"
+    assert len(list(settings.trajectory_dir.glob("*.json"))) == 1

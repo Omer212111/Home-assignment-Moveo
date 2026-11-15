@@ -212,3 +212,44 @@ Houston's total is higher (4.67 vs 4.20) because of winter and severe-storm days
 The details panel builds a hubs x hazards table (days and rank) from the tool result, like the
 ranking table, never by parsing the model's text. `AgentAnswer` is unchanged: the comparison is
 in `tool_calls`, which the API already returns.
+
+---
+
+## 12. Agent trajectories: how the agent thought and acted (`app/agent/trajectory.py`)
+
+**What it does:** the loop records every step of a question as events: each model call (a
+summary of the model's thinking, the tools it asked for, time, tokens, stop reason), each tool run
+(arguments, a one-line summary of the result, cache hit, error), schema retries and the accepted
+answer. The events are returned by `/chat` (`result.trajectory`), saved as one JSON file per
+question in `data/trajectories/` (git-ignored), saved per eval turn in `evals/trajectories/`, and
+printed as a readable timeline with `uv run python -m app.agent.trajectory [file]`.
+
+**Decision 1: where does "how the agent thinks" come from?**
+Sonnet 5.5 always uses adaptive thinking, but the API returns the thinking text empty by default
+(`display: "omitted"`). We request `display: "summarized"`: a readable summary of the reasoning.
+Billing is the same either way; it is configurable (`LLM_THINKING_DISPLAY`). Limits stated
+honestly: it is a *summary*, not the raw chain of thought, and at effort `low` the model may think
+very little on simple steps, so some steps show no thinking.
+
+**Decision 2: one log format for chat, evals and the UI.**
+The same event list feeds the API, the files, the CLI viewer and the evals, so a failing eval case
+can be read step by step exactly as a user would see it in the chat. This is how eval run 3's
+duplicate calls would have been diagnosed directly ("model call 2 calls rank_hubs again").
+
+**Decision 3: JSON files, not a database table.**
+Trajectories are a debugging and review aid, not product data: files are easy to open, diff,
+attach to a bug report and commit for the eval runs. Saving can never fail an answer (errors are
+logged). Trade-off: no querying across questions; a table (or OpenTelemetry tracing) would be the
+production step.
+
+**Decision 4: what is left out.**
+Full tool results are not repeated in the trajectory (they are in `tool_calls` and can be large);
+the trajectory keeps a one-line summary per tool run. Conversation history across turns still
+stores only question and answer text (section 6), so thinking blocks never leak into later turns.
+
+**Decision 5: the UI.**
+An "Agent steps" switch in the header (remembered in the browser) shows a collapsible timeline
+under each answer: thinking summary, tool calls, results, retries. Off by default, so analysts see
+a clean chat and reviewers can turn the reasoning on. Found in browser testing: on a phone the
+example buttons left only 182 px for the conversation; they are now hidden on phones once the
+conversation has started.

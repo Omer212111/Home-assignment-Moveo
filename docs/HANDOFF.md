@@ -50,13 +50,14 @@ Work started around 13:30 UTC on 2026-11-15; about 4 hours used so far.
 | API | `app/main.py` | `GET /` (UI), `/health`, `/rankings`, `/hubs/{id}`, `POST /chat` |
 | Agent | `app/agent/{schemas,tools,prompts,loop}.py` | `claude-sonnet-5-5`, effort low, refusal fallbacks; hand-written tool loop; tools `rank_hubs`, `explain_hub`, `compare_hubs` (slice 3, `DESIGN_DECISIONS.md` section 11); `ModelAnswer` = LLM output schema (no ranking), `AgentAnswer` = API response (server attaches the ranking from the engine); per-question cache for identical tool calls; tool schemas via `anthropic.transform_schema` (strict mode rejects min/max) |
 | UI | `app/static/index.html` | single page, no libraries, chat + details panel |
-| Tests | `tests/` | 42 offline tests (`uv run pytest -q`) |
+| Tests | `tests/` | 45 offline tests (`uv run pytest -q`) |
 | Evals | `evals/cases.yaml`, `evals/checks.py`, `evals/run.py` | 7 cases / 9 turns; `uv run python -m evals.run` (~$0.16-0.20 per run, laptop only) |
 
 Current top of the ranking: Boston 13.1, Minneapolis 11.7, Denver 10.3, Milwaukee 10.3, Chicago 9.6 (winter-driven). Virginia Beach (#6) is inflated by coastal wind, a documented limitation.
 
 ## 4b. Run the chat locally
 `uv run uvicorn app.main:app --reload`, then open http://127.0.0.1:8000/ (needs `ANTHROPIC_API_KEY` in `.env`).
+Agent trajectories (thinking summaries, tool calls): "Agent steps" switch in the UI; files in `data/trajectories/`; `uv run python -m app.agent.trajectory` prints the latest (`DESIGN_DECISIONS.md` section 12).
 
 ## 5. Documentation to read first
 - `docs/DESIGN_DECISIONS.md`: every decision for the API, agent and UI, with reasons (sections 1-10)
