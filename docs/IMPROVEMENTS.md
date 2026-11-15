@@ -38,7 +38,24 @@ Run each hub with low / base / high parameter sets and report a range (e.g. "Min
 ## 7. FEMA National Risk Index
 Add modelled hurricane, flood and tornado frequency per county (rare events that 5 years of weather cannot capture). The download is blocked from our environment; it needs a manual CSV download.
 
-## 8. Smaller items
+## 8. Agent loop fixes found in eval run 3 (see `docs/EVALS.md`)
+Run 3 showed that duplicate tool calls always arrive in a *later* model call, never in the same
+response, so the per-question cache saves the tool work but not the extra round trip (~5k input
+tokens, ~2 s). It also exposed a user-visible bug. Proposed fixes, in priority order:
+
+| # | Fix | Why |
+|---|---|---|
+| A | **Attach the ranking deterministically** (`app/agent/loop.py:_ranking_from`): among `rank_hubs` calls with the same hazard and region, attach the one with the largest `top_n` (a top 10 is a prefix of the top 50); with different filters, the last call. | **Bug:** in `impossible_n` the model called `top_n=50`, then `top_n=10`; the server attaches the last call, so a user who asked for 100 hubs saw 10 in the table. Code-only fix, independent of the model. |
+| B | **Fix the eval check** (`evals/checks.py:ranking_mismatch`): compare against the engine's ranking for the case's *expected* arguments, not the last call; add a `max_model_calls` expectation so extra round trips fail a check. | The check uses the same "last call" rule as the server, so it cannot catch bug A; duplicates are only printed today. |
+| C | **Prompt:** "if the result has more than 10 rows, show its first 10; do not call the tool again for a shorter list". | The rule "show at most 10 rows" is the likely cause of the 50 -> 10 re-call. |
+| D | **Smaller tool result for long rankings:** full detail for rows 1-10, only rank/city/days for rows 11-50 (the server keeps the full result for the UI). | `impossible_n` is the most expensive case (~29k input tokens); the 50 detailed rows are re-sent on every later model call. |
+| E | **Prompt caching** on system prompt, tools and history. | Makes any extra round trip, and every follow-up, much cheaper. |
+
+Deliberately not done yet: forbidding tools after the first tool round (`tool_choice: none`). It is
+the only hard stop for extra round trips, but it would block chained questions such as "why is the
+riskiest hub so high?" (rank, then explain). Revisit once the slice-3 tools exist.
+
+## 9. Smaller items
 - Group neighbouring hubs into metros (Dallas / Fort Worth / Arlington, the Bay Area, Phoenix / Mesa, LA / Long Beach).
 - Statewide FEMA declarations (county code 000) are ignored today; decide whether to include them.
 - Exposure is not risk: add hub vulnerability (building standard, backup power, alternative routes) when the company can provide it.

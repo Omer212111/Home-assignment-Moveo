@@ -68,13 +68,10 @@ Current top of the ranking: Boston 13.1, Minneapolis 11.7, Denver 10.3, Milwauke
 - Changes after run 1: `weather_years` in the tool's `method`; per-question cache; the server attaches the ranking; at most 10 rows in the answer text.
 - **Run 2:** 37/37, $0.16; the 50-hub answer took 9.6 s and 1,147 output tokens. **But duplicate calls persist**: baseline and `impossible_n` each called `rank_hubs` twice with identical arguments (`impossible_n` input went up to 26,769 tokens). Report committed (`ba3f1a0`).
 - Changes after run 2 (commit `e1a48c2`): the prompt no longer says "your last call"; each tool call records the `step` (model call) that requested it; the runner prints steps, cached duplicates and a duplicate count.
-- **Run 3: PENDING.** The user runs `uv run python -m evals.run` on the laptop. Compare:
-  - whether duplicates come in the same model call (cache handles them) or in separate steps (needs a structural fix)
-  - input tokens of `baseline_top10` (run 2: 10,926) and `impossible_n` (run 2: 26,769)
-  - still 37/37
+- **Run 3:** 36/37 (see `docs/EVALS.md`). Duplicates come in separate model calls; `impossible_n` exposed a ranking-attach bug. Fixes postponed to `docs/IMPROVEMENTS.md` section 8.
 
 ## 7. Next steps (in order; stop for review after each)
-1. **Analyse eval run 3** with the user and decide on a fix for duplicate calls if needed.
+1. ~~Analyse eval run 3~~ (done; fixes A-E deferred to `docs/IMPROVEMENTS.md` section 8 by the user's choice).
 2. **Slice 3: `compare_hubs` and `explain_hub` tools** for "Compare Miami and Houston (hurricane + flood)" and "Why is Dallas high?". `explain_hub` can use `/hubs/{id}` data: per-hazard days, drivers, counted FEMA disasters. Add eval cases.
 3. **Slice 4: `weather_stat` tool** for "% of days in Denver last year with snowfall" ("last year" = 2025, inside the stored window; state the date range and the >= threshold used). Add eval cases.
 4. **README rewrite**: run instructions (Windows + macOS/Linux), assumptions and limitations, repository structure, data storage choice (the required design-doc items).
