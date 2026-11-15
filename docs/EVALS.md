@@ -100,3 +100,25 @@ Changes:
 Run 5 is the first run with trajectories (and with `display: "summarized"`), so it changes two
 things at once: the guardrail stops the loop, and the trajectories should show *why* the model
 repeats (its thinking summary before each repeated call).
+
+## Run 5 (guardrail + trajectories + thinking summaries): 58/58 checks, ~$0.26
+
+| Case | Model calls | Seconds (run 4 -> 5) | Notes |
+|---|---|---|---|
+| baseline_top10 | 3 | 11.4 -> 12.3 | one repeated call; the guardrail forced the answer on call 3 |
+| region_hazard_small_n | 2 | 10.0 -> 17.5 | no repeat (run 4: two repeats) |
+| impossible_n | 2 | failed -> 21.2 | one call with `top_n=50`; the 50 -> 10 re-call of run 3 did not happen |
+| out_of_scope | 1 | 3.0 -> 10.1 | same tokens as run 4, three times slower |
+| follow_up_context | 2 + 2 | 7.8 / 6.5 -> 8.9 / 6.9 | |
+| compare_hurricane_flood | 2 | failed -> 9.1 | `compare_hubs(miami, houston, [tropical, flood])` |
+| explain_premise | 2 + 2 | failed -> 7.8 / 8.2 | answer states rank 17; follow-up resolves "it" to Dallas |
+
+Findings:
+1. All 7 cases pass, including the three assignment questions added in slice 3.
+2. The guardrail fired once (baseline). In the other cases the model did not repeat at all, so
+   the run-4 loops did not reappear even without the guardrail. One run per case cannot tell
+   whether that is due to the thinking setting, the reworded cache note, or chance.
+3. **Latency went up**: `out_of_scope` made one model call with the same token counts as in run 4
+   but took 10.1 s instead of 3.0 s; `region_hazard_small_n` 17.5 s for 2 calls. The likely cause
+   is `display: "summarized"` (generating the thinking summary), which is the only change on that
+   path. To confirm with the trajectories' per-call timings, or a run with `LLM_THINKING_DISPLAY=omitted`.
