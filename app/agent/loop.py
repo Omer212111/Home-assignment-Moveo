@@ -23,6 +23,7 @@ class ToolCall(BaseModel):
     input: dict
     is_error: bool
     duration_ms: int
+    result: dict  # what the model saw (used by the evals' grounding check and the UI)
 
 
 class AgentResult(BaseModel):
@@ -106,7 +107,7 @@ def ask(question: str, history: list[dict] | None = None) -> AgentResult:
                 t0 = time.perf_counter()
                 result, is_error = run_tool(block.name, block.input)
                 calls.append(ToolCall(name=block.name, input=block.input, is_error=is_error,
-                                      duration_ms=int((time.perf_counter() - t0) * 1000)))
+                                      duration_ms=int((time.perf_counter() - t0) * 1000), result=result))
                 results.append({"type": "tool_result", "tool_use_id": block.id,
                                 "content": json.dumps(result), "is_error": is_error})
             messages.append({"role": "user", "content": results})  # all results in one message

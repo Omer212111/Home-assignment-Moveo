@@ -1,0 +1,46 @@
+# Agent eval set: real API calls (run: uv run python -m evals.run). Focus on edge cases.
+#
+# Checks applied to EVERY turn: answer matches the JSON schema, numbers are grounded in tool
+# results, "X of the Y" counts are correct, and any ranking equals the engine's ranking for the
+# arguments the model used. `expect` adds per-turn checks:
+#   tool:        rank_hubs | none      which tool must (or must not) be called
+#   args:        exact tool arguments that must be used
+#   ranking:     present | null
+#   confidence:  allowed confidence values
+#   mentions:    strings the answer must contain (case-insensitive)
+
+cases:
+  - id: baseline_top10
+    why: The main demo question. "Dangerous" without a hazard must map to hazard=total.
+    turns:
+      - question: What are the 10 most dangerous hubs?
+        expect: {tool: rank_hubs, args: {hazard: total, region: null, top_n: 10}, ranking: present}
+
+  - id: region_hazard_small_n
+    why: Three filters at once (region, hazard, N), with wording that differs from the enum values.
+    turns:
+      - question: Which 3 Midwest hubs are most exposed to winter disruption?
+        expect: {tool: rank_hubs, args: {hazard: winter, region: Midwest, top_n: 3}, ranking: present}
+
+  - id: impossible_n
+    why: The user asks for more hubs than exist; the tool allows at most 50. The agent must not
+      invent hubs and should say there are only 50.
+    turns:
+      - question: Show me the top 100 riskiest hubs.
+        expect: {tool: rank_hubs, args: {hazard: total, top_n: 50}, ranking: present, mentions: ["50"]}
+
+  - id: out_of_scope
+    why: A city that is not a hub and a future forecast. No tool call, no ranking, low confidence,
+      no invented numbers.
+    turns:
+      - question: What will the weather be in Paris next week, and how risky is our Paris hub?
+        expect: {tool: none, ranking: null, confidence: [low]}
+
+  - id: follow_up_context
+    why: Synonym mapping ("hurricanes" -> tropical) and a follow-up that only makes sense with the
+      previous turn ("only the ones in the South").
+    turns:
+      - question: Which hubs are most at risk from hurricanes?
+        expect: {tool: rank_hubs, args: {hazard: tropical}, ranking: present}
+      - question: Only the ones in the South, top 3.
+        expect: {tool: rank_hubs, args: {hazard: tropical, region: South, top_n: 3}, ranking: present}

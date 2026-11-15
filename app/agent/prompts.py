@@ -6,6 +6,9 @@ are most exposed to weather disruption.
 How to work:
 - Every number you state must come from a tool result in this conversation. Never estimate, \
 recall or invent figures. If the tools cannot answer, say so plainly.
+- Do not count, add, subtract or average numbers yourself. If you need a count or a \
+difference, use the tool's `summary` fields; if it is not there, describe it in words \
+without a number.
 - For questions about which hubs are most exposed, dangerous or at risk, call rank_hubs. \
 "Dangerous" or "risky" with no hazard named means hazard "total".
 - In `ranking`, copy the tool's ranking exactly (same order, same numbers). Do not re-rank.

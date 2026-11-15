@@ -37,10 +37,19 @@ def rank_hubs(args: RankHubsInput) -> dict:
             **({"caveat": "high-wind days likely overstated (coastal grid cell partly over water)"}
                if r.hub_id in COASTAL_WIND_HUBS and r.hazards["high_wind"].days_per_year > 0 else {}),
         })
+    counts: dict[str, int] = {}
+    for row in rows:
+        counts[row["main_hazard"]] = counts.get(row["main_hazard"], 0) + 1
     return {
         "hazard": args.hazard if args.hazard == "total" else f"{args.hazard} ({labels[args.hazard]})",
         "region": args.region,
         "ranking": rows,
+        # Pre-computed so the model never has to count or subtract by itself.
+        "summary": {
+            "hubs_returned": len(rows),
+            "hubs_by_main_hazard": counts,
+            "gap_first_to_last_days": round(rows[0]["days_per_year"] - rows[-1]["days_per_year"], 2) if rows else None,
+        },
         "hubs_not_ranked_incomplete_data": out["excluded_incomplete_data"],
         "method": METHOD,
     }
