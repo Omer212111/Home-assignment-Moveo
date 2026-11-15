@@ -37,8 +37,10 @@ flowchart LR
         TOOLS["<b>5 tools</b><br/>rank · explain · compare<br/>breakdown · weather_stat"]
         ENG["<b>Scoring service</b><br/>active scoring run<br/>cached in memory"]
         REST["<b>GET /rankings · /hubs</b><br/>no LLM"]
+        ALERT["<b>Alerts</b><br/>monthly outlook (scheduled)<br/>score change (new run)"]
         CHAT --> AGENT --> TOOLS --> ENG
         REST --> ENG
+        ENG --> ALERT
     end
 
     CLAUDE["<b>Anthropic API</b><br/>Claude Sonnet 5.5"]
@@ -51,6 +53,8 @@ flowchart LR
     ENG <--> DB
     CHAT <-- "history" --> DB
     BATCH -- "restore at startup" --> DB
+    HOOK["<b>Webhook</b><br/>Slack-compatible JSON"]
+    ALERT -- "POST" --> HOOK
 
     classDef client fill:#f3eefa,stroke:#7d5bb5,color:#271a3b
     classDef api fill:#e8f1fb,stroke:#3b78c3,color:#13263d
@@ -61,6 +65,8 @@ flowchart LR
     class UI client
     class CHAT,REST api
     class AGENT,TOOLS agent
+    class ALERT agent
+    class HOOK llm
     class CLAUDE llm
     class ENG,DB,BATCH eng
     class SVC group
@@ -138,6 +144,8 @@ uv run pytest -q
 | `LLM_EFFORT` | `low` | Thinking effort; the tools do the computing |
 | `LLM_THINKING_DISPLAY` | `summarized` | `summarized` returns a readable thinking summary (for the "Agent steps" view); `omitted` returns none |
 | `REDIS_URL` | (none) | Optional: keep the raw API cache in Redis instead of files (section 7) |
+| `ALERT_WEBHOOK_URL` | (none) | Optional: where alerts are POSTed (Slack-compatible JSON); without it they are stored and shown in the page |
+| `ALERTS_TOKEN` | (none) | Optional: token required by `POST /alerts/check` |
 | `OPEN_METEO_API_KEY` | (none) | Optional: paid Open-Meteo key, only for re-downloading weather |
 
 ---
@@ -262,6 +270,8 @@ eval cost.
 | `GET /health` | no | Status, number of hubs scored, active scoring run and data date |
 | `GET /rankings?hazard=&region=&top_n=&season=&order=` | no | Deterministic ranking, e.g. `?season=summer` or `?order=least` |
 | `GET /hubs/{hub_id}` | no | Full breakdown of one hub: hazards, drivers, counted FEMA disasters |
+| `GET /alerts` | no | Recent alerts (monthly outlooks, score changes) with delivery status |
+| `POST /alerts/check` | no | Webhook-triggered outlook check (idempotent); header `X-Alerts-Token` if `ALERTS_TOKEN` is set |
 | `POST /chat` | yes | `{"message": "...", "session_id": null}` -> answer, ranking, tool calls, trajectory, tokens |
 
 Example:
@@ -272,13 +282,35 @@ curl "http://127.0.0.1:8000/rankings?hazard=winter&region=Midwest&top_n=3"
 
 ---
 
+### Alerts (bonus)
+
+Two kinds (policy in `config/alerts.yaml`, details in `docs/DESIGN_DECISIONS.md` section 20):
+
+- **Monthly risk outlook (scheduled):** 7 days before a month starts, **one digest** of the hubs for
+  which that month is historically severe: monthly index >= 300 (3x a typical hub's average month)
+  with >= 3 past events. Example: January 2027 lists 17 hubs, Boston first (index 964, winter).
+- **Score change (event-driven):** when a new scoring run becomes active, the hubs whose index moved
+  by >= 25 points or crossed a tier, for the total and per hazard.
+
+Created once (dedup key per month / per run, with a catch-up after downtime) and delivered through
+an **outbox** (pending -> claimed with a lease -> delivered, retried every 60 s, at-least-once with an
+idempotency key), POSTed to `ALERT_WEBHOOK_URL` if set, always visible at `GET /alerts` and with the
+**Alerts** button in the page. Safe with several processes at once (`docs/DESIGN_DECISIONS.md` section 21).
+
+```
+uv run python -m app.alerts outlook --month 2027-01
+uv run python -m app.alerts list
+```
+
+---
+
 ## 6. Evaluation
 
 Two layers:
 
 | Layer | Checks | Command | Cost |
 |---|---|---|---|
-| Unit tests (`tests/`, 71 tests) | Scoring rules, time breakdowns, stored scoring runs, ingestion, API, agent loop with a scripted fake Claude, the eval checks themselves, Redis cache | `uv run pytest -q` | free, offline |
+| Unit tests (`tests/`, 84 tests) | Scoring rules, time breakdowns, stored scoring runs, ingestion, API, agent loop with a scripted fake Claude, the eval checks themselves, Redis cache | `uv run pytest -q` | free, offline |
 | Agent evals (`evals/`, 15 cases / 17 turns) | The real model on edge cases: the 4 assignment questions, a city that is not a hub, "top 100" when only 50 exist, follow-ups, "winter" hazard vs season, safest hubs, worst month, per-year comparison, hurricane season | `uv run python -m evals.run` | ~$0.55 |
 
 Checks on every turn: valid answer format, the right tool with the right arguments, ranking equal
@@ -384,7 +416,8 @@ app/
   settings.py           settings from .env (Pydantic)
   config.py             loads and validates config/*.yaml
   db.py                 SQLite schema, snapshot restore/export
-  ingest.py             offline ingestion CLI
+  ingest.py             offline ingestion CLI (ends with a scoring run)
+  alerts.py             monthly outlook and score-change alerts, webhook delivery
   sources/              open_meteo.py, fema_declarations.py, http_cache.py (Redis / files)
   scoring/
     disruption.py       the rules engine: disruption days per hub and hazard, ranking
@@ -401,7 +434,8 @@ app/
   static/index.html     the chat page (no build step, no libraries)
 config/
   hubs.yaml             the 50 hubs
-  disruption.yaml       disruption rules and thresholds (expert judgment)
+  disruption.yaml       disruption rules, thresholds, index reference and tiers
+  alerts.yaml           alert policy (thresholds, lead time)
 data/
   snapshot/             parquet snapshot (in git)
   raw/                  raw API responses (in git)
@@ -438,10 +472,10 @@ Every answer from the agent carries `assumptions`, `confidence` and `uncertainty
 ## 12. Status and next steps
 
 Built: data ingestion, scoring engine, time breakdowns, 5-tool agent with guardrails, API, chat
-page with agent-step view, trajectories, Redis cache, scores stored per scoring run, standardised index and tiers (also per month), scoring triggered by ingestion, 71 tests, 15-case eval set (run 7: 110/111).
+page with agent-step view, trajectories, Redis cache, scores stored per scoring run, standardised index and tiers (also per month), scoring triggered by ingestion, alerts (monthly outlook + score change) safe under concurrency, 84 tests, 15-case eval set (run 7: 110/111).
 
 Next (in order): refresh `docs/ARCHITECTURE.md`; deploy (Docker on Render); bonus: voice input
-(browser Web Speech API) and an alert when a hub's score changes. Longer-term improvements (cost in
+(browser Web Speech API); live NWS alerts for storms in the coming days. Longer-term improvements (cost in
 dollars, tail risk, FEMA National Risk Index, uncertainty ranges) are in `docs/IMPROVEMENTS.md`.
 
 ---

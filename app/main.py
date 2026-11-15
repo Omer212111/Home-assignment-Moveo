@@ -2,6 +2,7 @@
 
     uv run uvicorn app.main:app --reload       ->  http://127.0.0.1:8000/docs
 """
+import asyncio
 import logging
 import uuid
 from typing import Literal
@@ -10,15 +11,16 @@ from datetime import datetime, timezone
 
 from pathlib import Path
 
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import FastAPI, Header, HTTPException, Query
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 
-from app import db
+from app import alerts, db
 from app.agent import trajectory
 from app.agent.loop import AgentError, AgentResult, ask
 from app.agent.schemas import Hazard, Region, Season
 from app.scoring import store
+from app.settings import settings
 from app.scoring.periods import SEASONS
 from app.scoring import service
 from app.scoring.disruption import HubDisruption, rank
@@ -27,10 +29,25 @@ log = logging.getLogger("weather_agent")
 HISTORY_TURNS = 6  # earlier question/answer pairs sent with each new question
 
 
+async def _alerts_loop():
+    """Scheduled alerts, every tick: create the monthly outlook if due (catch-up after downtime) and
+    send pending alerts (retries). Runs in a worker thread so the event loop never blocks. Safe with
+    restarts and several replicas: creation is deduplicated and delivery claims alerts with a lease."""
+    while True:
+        try:
+            await asyncio.to_thread(alerts.check_outlook)
+            await asyncio.to_thread(alerts.deliver_pending)
+        except Exception:
+            log.exception("alerts tick failed")
+        await asyncio.sleep(settings.alerts_check_interval_seconds)
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     service.load_results(restore=True)  # rebuild SQLite from the committed snapshot, then score
+    task = asyncio.create_task(_alerts_loop())
     yield
+    task.cancel()
 
 
 app = FastAPI(title="Weather Risk Intelligence Agent", version="0.1.0", lifespan=lifespan)
@@ -60,6 +77,23 @@ def rankings(hazard: Hazard = "total", region: Region | None = None, top_n: int 
              season: Season | None = None, order: Literal["most", "least"] = "most"):
     """Hubs ranked by expected disruption days per year, computed by the rule engine only."""
     return rank(service.results(), hazard, region, top_n, SEASONS[season] if season else None, order)
+
+
+@app.get("/alerts")
+def list_alerts(limit: int = Query(20, ge=1, le=100)):
+    """Recent alerts (monthly outlooks and score changes), newest first."""
+    return {"alerts": alerts.recent(limit), "webhook_configured": bool(settings.alert_webhook_url)}
+
+
+@app.post("/alerts/check")
+def check_alerts(x_alerts_token: str | None = Header(default=None)):
+    """Webhook-triggered check (e.g. from cron or a CI job): run the monthly outlook now.
+    Idempotent: returns the existing alert if this month's outlook was already sent."""
+    if settings.alerts_token and x_alerts_token != settings.alerts_token:
+        raise HTTPException(401, "invalid X-Alerts-Token")
+    alert_id = alerts.check_outlook()
+    return {"created_alert_id": alert_id, "already_sent": alert_id is None,
+            "outlook_for": "%d-%02d" % alerts.outlook_month()}
 
 
 @app.get("/hubs/{hub_id}", response_model=HubDisruption)

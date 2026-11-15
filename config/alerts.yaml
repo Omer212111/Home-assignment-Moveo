@@ -1,0 +1,15 @@
+# Alert policy (who is told what, when). Kept apart from config/disruption.yaml on purpose:
+# changing a notification threshold must not change the scores or create a new scoring run.
+
+# 1. Monthly outlook: before a month starts, list the hubs for which that month has historically
+#    been severe. Sent as ONE digest per month (not one message per hub) to avoid alert fatigue.
+outlook:
+  min_index: 300      # monthly index (100 = a typical hub's average month); 300 = 3x, ~1.2 expected days
+  min_events: 3       # at least this many past events in that month: one-off months are not a pattern
+  lead_days: 7        # send this many days before the month starts
+
+# 2. Score change: when a new scoring run becomes active (new data or new rules), report hubs whose
+#    index moved a lot, for the total and for each hazard.
+change:
+  min_index_change: 25   # index points (25 = ~1.2 days per year for a whole year)
+  tier_change: true      # also alert when a hub crosses a tier (e.g. elevated -> high)

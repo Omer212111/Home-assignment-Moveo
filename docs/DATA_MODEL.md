@@ -77,6 +77,7 @@ flowchart LR
 | `DISASTER_DECLARATIONS` | SQLite + parquet snapshot | FEMA disasters per county since 2006: the rare events 5 years of weather cannot show | ingestion (OpenFEMA) | engine |
 | `INGEST_RUNS` | SQLite + parquet snapshot | Log of every download (source, rows, cache or API, status) | ingestion | `ingest --status`, audit |
 | `CONVERSATIONS` | SQLite only (not committed) | Chat history, so follow-up questions have context | `/chat` | `/chat` (last 6 turns) |
+| `ALERTS` | SQLite only (not committed) | Every alert sent or stored, with a unique dedup key and delivery status | alerts (outlook, score change) | `GET /alerts`, the page |
 | `RULE_SETS` | SQLite (scoring) | Every version of the scoring rules ever used, keyed by their hash | scoring | audit, run comparison |
 | `SCORING_RUNS` | SQLite (scoring) | One scoring pass: rule set, data fingerprint, data as of, status; exactly one is `active` | scoring | the service (which run to serve) |
 | `DISRUPTION_DAYS` | SQLite (scoring) | Every disruption day and counted disaster after the rules: the source of all time breakdowns | scoring | month / season / year tools |
@@ -94,6 +95,7 @@ flowchart LR
 | `DISASTER_DECLARATIONS` | **disaster_number**, **county_fips**, incident_type, declaration_type (DR / EM / FM), title, declaration_date, incident_begin_date |
 | `INGEST_RUNS` | **run_id**, source, params, started_at, finished_at, rows, status, detail (cache or API + cache location) |
 | `CONVERSATIONS` | **session_id**, **turn**, role, content, created_at |
+| `ALERTS` | **alert_id**, kind (outlook / change), dedup_key (unique), run_id, title, message, payload_json, created_at, status (pending / delivered / failed / stored), attempts, lease_until, delivered_at, delivery_error |
 | `RULE_SETS` | **rule_set_id**, sha256 (unique), rules_yaml, first_used_at |
 | `SCORING_RUNS` | **run_id**, rule_set_id, data_fingerprint, data_as_of, status (running / active / superseded), hubs, started_at, finished_at |
 | `DISRUPTION_DAYS` | **run_id**, **hub_id**, **date**, **hazard**, **event**, value, channel (weather / declarations), label (rule) |

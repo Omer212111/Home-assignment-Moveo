@@ -105,6 +105,22 @@ CREATE TABLE IF NOT EXISTS conversations (
     session_id TEXT, turn INTEGER, role TEXT, content TEXT, created_at TEXT,
     PRIMARY KEY (session_id, turn)
 );
+CREATE TABLE IF NOT EXISTS alerts (
+    alert_id INTEGER PRIMARY KEY AUTOINCREMENT,
+    kind TEXT NOT NULL,                   -- outlook | change
+    dedup_key TEXT UNIQUE NOT NULL,       -- e.g. outlook:2026-12, change:3->4: created once, atomically
+    run_id INTEGER,                       -- scoring run the alert is based on
+    title TEXT NOT NULL,
+    message TEXT NOT NULL,                -- the text sent to people
+    payload_json TEXT NOT NULL,           -- structured content (hubs, numbers)
+    created_at TEXT NOT NULL,
+    -- Outbox: pending -> delivered | failed; 'stored' = not to be sent (no webhook, or empty outlook).
+    status TEXT NOT NULL DEFAULT 'pending',
+    attempts INTEGER NOT NULL DEFAULT 0,
+    lease_until TEXT,                     -- a sender holds the alert until then (no double send)
+    delivered_at TEXT,
+    delivery_error TEXT
+);
 CREATE TABLE IF NOT EXISTS ingest_runs (
     run_id INTEGER PRIMARY KEY AUTOINCREMENT, source TEXT, params TEXT,
     started_at TEXT, finished_at TEXT, rows INTEGER, status TEXT, detail TEXT
@@ -131,8 +147,11 @@ def _migrate(conn) -> None:
 @contextmanager
 def connect():
     settings.db_path.parent.mkdir(parents=True, exist_ok=True)
-    conn = sqlite3.connect(settings.db_path)
+    # timeout: wait up to 30 s for another writer instead of failing with "database is locked".
+    conn = sqlite3.connect(settings.db_path, timeout=30)
     conn.row_factory = sqlite3.Row
+    # WAL: readers (API requests) never wait for a writer (ingestion, scoring, alerts) and vice versa.
+    conn.execute("PRAGMA journal_mode=WAL")
     try:
         _migrate(conn)
         conn.executescript(SCHEMA)

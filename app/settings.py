@@ -31,6 +31,13 @@ class Settings(BaseSettings):
     # Config files
     hubs_file: Path = ROOT / "config" / "hubs.yaml"
     scoring_file: Path = ROOT / "config" / "disruption.yaml"
+    alerts_file: Path = ROOT / "config" / "alerts.yaml"
+
+    # Alerts: outgoing webhook (Slack-compatible JSON; any receiver works). Unset: alerts are only
+    # stored and shown at GET /alerts. ALERTS_TOKEN protects POST /alerts/check when set.
+    alert_webhook_url: str | None = None
+    alerts_token: str | None = None
+    alerts_check_interval_seconds: int = 60   # outlook check + retry of pending deliveries
 
     # Data window: 5 full calendar years (see docs/PLAN.md, "History window")
     history_start: str = "2021-01-01"

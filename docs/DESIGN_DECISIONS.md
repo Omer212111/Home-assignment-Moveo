@@ -468,3 +468,73 @@ Three kinds of work, three moments (measured on the current data):
 The startup check (score if the active run does not match the rules and data) stays as a safety
 net, e.g. for a fresh clone or after editing the rules. Per-hub lazy scoring on demand would be
 the right choice only with thousands of hubs that are rarely asked about.
+
+---
+
+## 20. Alerts: monthly risk outlook and score changes (`app/alerts.py`, `config/alerts.yaml`)
+
+Two kinds, chosen with the user:
+
+| | Monthly outlook | Score change |
+|---|---|---|
+| Question it answers | "Which hubs are entering a month that is historically severe for them?" | "Did a hub's risk change materially?" |
+| Trigger | scheduled: 7 days before the month (hourly in-server check + catch-up at startup), or `POST /alerts/check` (webhook-triggered, e.g. from cron) | event: a new scoring run becomes active (ingestion, `store --new`, startup re-score) |
+| Rule | monthly index >= 300 (3x a typical hub's average month, ~1.2 expected days) **and** >= 3 past events in that month | total or hazard index moved >= 25 points (~1.2 days/yr) **or** crossed a tier |
+| Form | **one digest per month** listing the hubs, worst first | one alert per new run listing the changes |
+
+**Why these thresholds (measured on the data).** Index >= 200 (the "very high" tier) would fire for
+28 hubs in January and 109 hub-months a year: alert fatigue. >= 300 gives 60 a year (17 in
+January, 21 in February, a few in summer). ">= 3 past events" removes months that look extreme
+because of a single event (Nashville September: one flood).
+
+**Why a digest.** One message listing 17 hubs is read; 17 messages are muted. An empty outlook is
+stored (the month counts as checked) but **not sent**, for the same reason.
+
+**Created once.** Every alert has a unique dedup key (`outlook:2027-01`, `change:3->4`), so restarts,
+a server that slept through the 1st (catch-up flags it "sent late"), a cron retry or several
+replicas never create it twice. Concurrency is covered in section 21.
+
+**Delivery.** A webhook POST in Slack-compatible JSON (`{"text": ...}` plus the structured alert) to
+`ALERT_WEBHOOK_URL`; any receiver works (Slack, Teams via a connector, a ticketing system). Without
+it, alerts are stored and shown at `GET /alerts` and in the page ("Alerts" button).
+`ALERTS_TOKEN` protects `POST /alerts/check`.
+
+**Policy apart from the scoring rules.** `config/alerts.yaml` is a notification policy; changing a
+threshold must not change scores or create a new scoring run, so it is not in `disruption.yaml`.
+
+**Caveats travel with the alert**: coastal hubs whose month is driven by wind are flagged (wind
+likely overstated), and every outlook says it is a historical average, not a forecast.
+
+Verified end to end with a real HTTP receiver: the server's startup catch-up created the November
+outlook and posted it; a following `POST /alerts/check` returned `already_sent`.
+Not built (next step): live NWS alerts (`api.weather.gov`) for "a storm is coming this week".
+
+---
+
+## 21. Concurrency: what can run in parallel, and how each race is handled
+
+Alerts made the system multi-writer: the server's alert loop, `POST /alerts/check`, ingestion
+creating a scoring run, the CLI and a second server instance can all write and send at once.
+**Each race was first reproduced with a stress test**, then fixed, then tested (the alert and store
+tests passed 5 runs in a row).
+
+| Race | Before | Fix |
+|---|---|---|
+| 8 concurrent outlook checks | already 1 POST: the UNIQUE dedup key makes "insert the alert" an atomic claim | kept; test with 8 threads |
+| 2-4 servers starting at once on a fresh database | **2 scoring runs** for the same rules and data | score outside the lock (~1 s), then `BEGIN IMMEDIATE` (SQLite's write lock) and **re-check** whether a matching run was activated meanwhile; if so, return it and discard ours. Now: 1 run |
+| 2 scoring runs at once | both read "previous run" before their transaction, so one change is alerted twice | "previous" is read inside the locked transaction; activations are serialised (1 -> 2 -> 3 -> 4) |
+| Crash between "alert stored" and "alert sent" | alert never sent | **outbox**: alerts are stored as `pending`; sending is separate and retried by the server loop every 60 s |
+| Two senders picking the same pending alert | double POST | a sender **claims** one alert with a single `UPDATE ... RETURNING` that sets a 120 s lease; a crashed sender's lease expires and another retries; after 5 attempts: `failed` |
+| Run activated, process dies before the change alert | change never reported | the change alert is written **in the same transaction** as the activation |
+| Slow webhook | blocked ingestion / the API (inline delivery, ~15 s of retries) | delivery is best effort after commit; failures stay `pending` for the loop; the loop runs in a worker thread, never on the event loop |
+| A request reads the cache while a new run loads | could see new results labelled with the old run id | `(run_id, results)` is one object swapped atomically; reload under a lock (one thread reloads, others keep serving) |
+| Readers vs writers in SQLite | readers blocked during writes; "database is locked" after 5 s | **WAL** journal mode (readers never wait for writers) and a 30 s busy timeout |
+
+**Delivery is at-least-once, not exactly-once.** Over HTTP the receiver may get the POST while the
+reply is lost; the alert is then re-sent after the lease. Every POST carries the dedup key as
+`idempotency_key`, so the receiver can drop the duplicate. Creation, by contrast, is exactly once.
+
+**Limits of this design.** SQLite serialises writers on one machine. With several machines the
+same patterns move to Postgres unchanged in spirit: `INSERT ... ON CONFLICT DO NOTHING` for
+creation, `SELECT ... FOR UPDATE SKIP LOCKED` for claiming outbox rows, and a transaction-level
+advisory lock (or the same re-check) around activating a scoring run.

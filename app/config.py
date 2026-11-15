@@ -157,3 +157,26 @@ def load_scoring() -> DisruptionConfig:
 def scoring_version() -> str:
     """Short hash of the scoring config, stored with every score so results are reproducible."""
     return hashlib.sha256(settings.scoring_file.read_bytes()).hexdigest()[:10]
+
+
+class OutlookPolicy(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    min_index: float = Field(gt=0)
+    min_events: int = Field(ge=1)
+    lead_days: int = Field(ge=0, le=27)
+
+
+class ChangePolicy(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    min_index_change: float = Field(gt=0)
+    tier_change: bool
+
+
+class AlertsConfig(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    outlook: OutlookPolicy
+    change: ChangePolicy
+
+
+def load_alerts() -> AlertsConfig:
+    return AlertsConfig.model_validate(yaml.safe_load(settings.alerts_file.read_text(encoding="utf-8")))

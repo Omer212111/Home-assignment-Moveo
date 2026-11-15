@@ -64,12 +64,31 @@ def _compute() -> list[HubDisruption]:
                        db.read_df("SELECT * FROM hubs ORDER BY pop_rank"), load_scoring(), window)
 
 
-def save_run(results: list[HubDisruption], rules_sha: str, rules_yaml: str, fingerprint: str) -> int:
+def save_run(results: list[HubDisruption], rules_sha: str, rules_yaml: str, fingerprint: str,
+             only_if_changed: bool = False) -> int:
     """Write a complete run, then make it the active one in a single transaction.
 
-    Readers see either the previous active run or the new one, never a half-written run."""
+    Readers see either the previous active run or the new one, never a half-written run.
+
+    Concurrency (several servers starting at once, ingestion while the server re-scores):
+    - BEGIN IMMEDIATE takes SQLite's write lock first, so activations are serialised and the
+      "previous" run read here is exactly the run this one supersedes.
+    - only_if_changed: scoring is done outside the lock (~1 s); inside it we re-check whether
+      another process has meanwhile activated a run for the same rules and data. If so, that run
+      is returned and ours is discarded (no duplicate run, no duplicate alert).
+    - The score-change alert is written in the same transaction as the activation (outbox), so
+      an activated run can never lose its alert; delivery happens afterwards."""
     data_as_of = max((r.weather_period.split("..")[1] for r in results if r.weather_period), default=None)
     with db.connect() as conn:
+        conn.execute("BEGIN IMMEDIATE")
+        if only_if_changed:
+            row = conn.execute(
+                "SELECT r.run_id FROM scoring_runs r JOIN rule_sets s ON s.rule_set_id = r.rule_set_id "
+                "WHERE r.status = 'active' AND s.sha256 = ? AND r.data_fingerprint = ?",
+                (rules_sha, fingerprint)).fetchone()
+            if row:
+                return row[0]
+        previous = conn.execute("SELECT MAX(run_id) FROM scoring_runs WHERE status = 'active'").fetchone()[0]
         conn.execute("INSERT OR IGNORE INTO rule_sets (sha256, rules_yaml, first_used_at) VALUES (?,?,?)",
                      (rules_sha, rules_yaml, _now()))
         rule_set_id = conn.execute("SELECT rule_set_id FROM rule_sets WHERE sha256 = ?", (rules_sha,)).fetchone()[0]
@@ -97,6 +116,9 @@ def save_run(results: list[HubDisruption], rules_sha: str, rules_yaml: str, fing
         # Switch the active run atomically (same transaction as the inserts above).
         conn.execute("UPDATE scoring_runs SET status = 'superseded' WHERE status = 'active'")
         conn.execute("UPDATE scoring_runs SET status = 'active', finished_at = ? WHERE run_id = ?", (_now(), run_id))
+        from app import alerts
+        alerts.record_change_alert(conn, previous, run_id)   # same transaction: activated <=> alerted
+    alerts.deliver_pending()   # best effort now; the server's loop retries anything left pending
     return run_id
 
 
@@ -146,7 +168,8 @@ def ensure_current() -> int:
             (rules_sha, fingerprint)).fetchone()
     if row:
         return row[0]
-    return save_run(_compute(), rules_sha, rules_yaml, fingerprint)
+    # Score outside the lock; save_run re-checks inside it (another process may have just done it).
+    return save_run(_compute(), rules_sha, rules_yaml, fingerprint, only_if_changed=True)
 
 
 def new_run() -> int:

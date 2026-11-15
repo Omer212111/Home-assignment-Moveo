@@ -55,7 +55,8 @@ Work started around 13:30 UTC on 2026-11-15; about 4 hours used so far.
 | Scores | `app/scoring/store.py` | SQLite scoring tables, one set per scoring run; memory caches the active run (`DESIGN_DECISIONS.md` section 17) |
 | Index | `config/disruption.yaml` `index` | 100 = median hub (4.85 days, fixed); tiers low..very high; per month/season pro-rated, `monthly_scores` table (`DESIGN_DECISIONS.md` section 18) |
 | Write path | `app/ingest.py::score_after_ingest` | ingestion creates the scoring run (`DESIGN_DECISIONS.md` section 19) |
-| Tests | `tests/` | 71 offline tests (`uv run pytest -q`) |
+| Alerts | `app/alerts.py`, `config/alerts.yaml` | monthly outlook digest (index >= 300, >= 3 events, 7 days ahead) + score-change alerts (>= 25 points or tier), dedup, outbox delivery with leases, safe under concurrency (`DESIGN_DECISIONS.md` sections 20-21) |
+| Tests | `tests/` | 84 offline tests (`uv run pytest -q`) |
 | Evals | `evals/cases.yaml`, `evals/checks.py`, `evals/run.py` | 15 cases / 17 turns; `uv run python -m evals.run` (~$0.16-0.20 per run, laptop only) |
 
 Current top of the ranking: Boston 13.1, Minneapolis 11.7, Denver 10.3, Milwaukee 10.3, Chicago 9.6 (winter-driven). Virginia Beach (#6) is inflated by coastal wind, a documented limitation.
@@ -85,7 +86,7 @@ Agent trajectories (thinking summaries, tool calls): "Agent steps" switch in the
 3. **Done (time-dimension slice, eval run 6 pending): `weather_stat`, `hub_breakdown`, `period` on rank/compare** (`docs/QUESTION_CATALOG.md`). Original note: **Slice 4: `weather_stat` tool** for "% of days in Denver last year with snowfall" ("last year" = 2025, inside the stored window; state the date range and the >= threshold used). Add eval cases.
 4. **README rewrite**: run instructions (Windows + macOS/Linux), assumptions and limitations, repository structure, data storage choice (the required design-doc items).
 5. **Deploy to Render**: Dockerfile; `ANTHROPIC_API_KEY` as a Render env var; the DB is rebuilt from the snapshot at startup.
-6. Bonus, only if time allows: voice (Web Speech API in the page); alerts (NWS + scheduler + webhook).
+6. Bonus: alerts **done** (monthly outlook + score change). Remaining: voice (Web Speech API in the page); live NWS alerts.
 7. **Session transcripts (mandatory deliverable)**: export the transcript of every AI session and commit it under `docs/ai-session/`.
 
 If short on time, cut in this order: voice, alerts, deploy (run locally instead).
