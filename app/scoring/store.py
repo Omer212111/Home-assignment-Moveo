@@ -18,6 +18,7 @@ from app import db
 from app.config import load_scoring
 from app.scoring.disruption import (CountedDeclaration, DayRecord, Driver, HazardDisruption, HubDisruption,
                                     compute_all)
+from app.scoring.periods import monthly_scores
 from app.settings import settings
 
 
@@ -89,6 +90,10 @@ def save_run(results: list[HubDisruption], rules_sha: str, rules_yaml: str, fing
             "INSERT INTO disruption_days VALUES (?,?,?,?,?,?,?,?)",
             [(run_id, r.hub_id, x.date.isoformat(), x.hazard, x.value, x.channel, x.label, x.event)
              for r in results for x in r.records])
+        conn.executemany(
+            "INSERT INTO monthly_scores VALUES (?,?,?,?,?,?,?)",
+            [(run_id, r.hub_id, m["hazard"], m["month"], m["days_per_year"], m["index"], m["tier"])
+             for r in results for m in monthly_scores(r, list(r.hazards))])
         # Switch the active run atomically (same transaction as the inserts above).
         conn.execute("UPDATE scoring_runs SET status = 'superseded' WHERE status = 'active'")
         conn.execute("UPDATE scoring_runs SET status = 'active', finished_at = ? WHERE run_id = ?", (_now(), run_id))

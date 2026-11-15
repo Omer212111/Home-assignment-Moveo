@@ -183,7 +183,9 @@ Two channels, combined per hazard:
 4.85, the median hub's total, fixed in `config/disruption.yaml`, so 100 = a typical hub (Dallas
 6.08 days -> 125). The same reference is used for each hazard, so hazard indices add up to the
 total. Tiers: low < 50, moderate < 100, elevated < 150, high < 200, very high >= 200 (on the
-current data 7 / 18 / 13 / 8 / 4 hubs).
+current data 7 / 18 / 13 / 8 / 4 hubs). **Per month and season** the reference is pro-rated (a month
+is compared with a typical hub's average month), so Denver's March is 624 (very high) and the 12
+monthly indices average to the annual index; stored in the `monthly_scores` table.
 
 Six hazards: winter (snow, ice, cold), flood (extreme rain), high wind, heat, tropical
 (hurricanes), severe storms. All thresholds are **expert judgment**, calibrated once against the
@@ -276,7 +278,7 @@ Two layers:
 
 | Layer | Checks | Command | Cost |
 |---|---|---|---|
-| Unit tests (`tests/`, 67 tests) | Scoring rules, time breakdowns, stored scoring runs, ingestion, API, agent loop with a scripted fake Claude, the eval checks themselves, Redis cache | `uv run pytest -q` | free, offline |
+| Unit tests (`tests/`, 70 tests) | Scoring rules, time breakdowns, stored scoring runs, ingestion, API, agent loop with a scripted fake Claude, the eval checks themselves, Redis cache | `uv run pytest -q` | free, offline |
 | Agent evals (`evals/`, 15 cases / 17 turns) | The real model on edge cases: the 4 assignment questions, a city that is not a hub, "top 100" when only 50 exist, follow-ups, "winter" hazard vs season, safest hubs, worst month, per-year comparison, hurricane season | `uv run python -m evals.run` | ~$0.55 |
 
 Checks on every turn: valid answer format, the right tool with the right arguments, ranking equal
@@ -434,7 +436,7 @@ Every answer from the agent carries `assumptions`, `confidence` and `uncertainty
 ## 12. Status and next steps
 
 Built: data ingestion, scoring engine, time breakdowns, 5-tool agent with guardrails, API, chat
-page with agent-step view, trajectories, Redis cache, scores stored per scoring run, standardised index and tiers, 67 tests, 15-case eval set (run 7: 110/111).
+page with agent-step view, trajectories, Redis cache, scores stored per scoring run, standardised index and tiers (also per month), 70 tests, 15-case eval set (run 7: 110/111).
 
 Next (in order): refresh `docs/ARCHITECTURE.md`; deploy (Docker on Render); bonus: voice input
 (browser Web Speech API) and an alert when a hub's score changes. Longer-term improvements (cost in

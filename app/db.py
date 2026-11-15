@@ -89,6 +89,17 @@ CREATE TABLE IF NOT EXISTS disruption_days (
     PRIMARY KEY (run_id, hub_id, date, hazard, event),
     FOREIGN KEY (run_id, hub_id) REFERENCES hub_results(run_id, hub_id)
 );
+CREATE TABLE IF NOT EXISTS monthly_scores (
+    run_id INTEGER NOT NULL,
+    hub_id TEXT NOT NULL,
+    hazard TEXT NOT NULL,                 -- a hazard, or 'total'
+    month INTEGER NOT NULL,               -- 1..12
+    days_per_year REAL NOT NULL,          -- expected days per year falling in that month
+    index_value REAL NOT NULL,            -- 100 = a typical hub's average month (reference / 12)
+    tier TEXT NOT NULL,
+    PRIMARY KEY (run_id, hub_id, hazard, month),
+    FOREIGN KEY (run_id, hub_id) REFERENCES hub_results(run_id, hub_id)
+);
 CREATE INDEX IF NOT EXISTS idx_runs_status ON scoring_runs(status);
 CREATE TABLE IF NOT EXISTS conversations (
     session_id TEXT, turn INTEGER, role TEXT, content TEXT, created_at TEXT,
@@ -106,8 +117,8 @@ SNAPSHOT_TABLES = ["hubs", "daily_weather", "disaster_declarations", "ingest_run
 
 # Bump when the derived scoring tables change shape. They hold no source data (they are rebuilt from
 # the snapshot and the rules), so an older version is simply dropped and recreated.
-SCORING_SCHEMA_VERSION = 2
-SCORING_TABLES = ["disruption_days", "hazard_scores", "hub_results", "scoring_runs", "rule_sets"]
+SCORING_SCHEMA_VERSION = 3
+SCORING_TABLES = ["monthly_scores", "disruption_days", "hazard_scores", "hub_results", "scoring_runs", "rule_sets"]
 
 
 def _migrate(conn) -> None:

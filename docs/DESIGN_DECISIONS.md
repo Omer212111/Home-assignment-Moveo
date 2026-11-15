@@ -430,8 +430,16 @@ later be priced).
   high 150-199, very high >= 200. On the current data: 7 / 18 / 13 / 8 / 4 hubs (very high:
   Boston 270, Minneapolis 242, Denver 213, Milwaukee 212). Bounds are validated (start at 0, increasing).
 - **Rankings are unchanged**: the index is proportional to days, so the order is the same.
-- **Seasons and months**: an index for a period compares those days with a typical hub's whole
-  year (stated in the tool's `method`).
+- **Per month, season and set of months (pro-rated reference)**: a period is compared with a typical
+  hub over the same length of time, i.e. reference x months / 12. A month is compared with a typical
+  hub's average month (4.85 / 12 = 0.40 days): Denver March, 2.52 days -> index 624, very high.
+  Rejected: comparing a month with a whole year (every month looks "low", tiers meaningless) and
+  with the typical hub's same month (summer medians near 0 explode, like heat). With pro-rating,
+  the 12 monthly indices (and the 4 seasonal ones) **average exactly to the annual index**, and the
+  same tiers mean the same thing at every grain. Applies to `hub_breakdown` (month / season; a single
+  calendar year uses the full reference), `rank_hubs` and `compare_hubs` with a season or months.
+- **`monthly_scores` table**: hub x hazard (+ total) x month per scoring run (4,200 rows): days per
+  year in that month, index, tier. Queryable in SQL, and the grain the scalable design uses.
 - **Storage**: `hub_results` and `hazard_scores` gained `index_value` and `tier`. Scoring tables
   are derived, so a schema version (`PRAGMA user_version`) drops and rebuilds them on upgrade;
   source tables and chat history are untouched.

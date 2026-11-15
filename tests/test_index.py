@@ -69,3 +69,40 @@ def test_old_scoring_tables_are_rebuilt_on_schema_upgrade(tmp_path, monkeypatch)
         kept = c.execute("SELECT COUNT(*) FROM conversations").fetchone()[0]
     assert "index_value" in cols and "tier" in cols
     assert kept == 1                                     # chat history is not touched
+
+
+def test_monthly_index_is_pro_rated_and_averages_to_the_annual_index():
+    from app.scoring.periods import breakdown
+    for hub in ("denver", "miami", "dallas"):
+        r = service.by_id(hub)
+        months = breakdown(r, "total", "month", [])
+        assert sum(m["index"] for m in months) / 12 == pytest.approx(r.index, abs=0.2)
+        seasons = breakdown(r, "total", "season", [])
+        assert sum(s["index"] for s in seasons) / 4 == pytest.approx(r.index, abs=0.2)
+    mar = next(m for m in breakdown(service.by_id("denver"), "total", "month", []) if m["period"] == "Mar")
+    assert (round(mar["index"]), mar["tier"]) == (624, "very high")   # 2.52 days vs 4.85 / 12
+
+
+def test_period_rankings_and_comparisons_use_the_pro_rated_reference():
+    res, _ = run_tool("rank_hubs", {**P, "hazard": "total", "region": None, "top_n": 1, "order": "most",
+                                    "season": "summer"})
+    top = res["ranking"][0]
+    assert top["index"] == pytest.approx(100 * top["days_per_year"] / (4.85 * 3 / 12), abs=0.1)
+    res, _ = run_tool("compare_hubs", {"hub_ids": ["miami", "houston"], "hazards": ["tropical"],
+                                       "season": None, "months": [6, 7, 8, 9, 10, 11]})
+    h = res["hubs"][0]
+    assert h["index"] == pytest.approx(100 * h["total_days_per_year"] / (4.85 * 6 / 12), abs=0.1)
+
+
+def test_monthly_scores_table_matches_the_breakdown():
+    from app.scoring import store
+    from app.scoring.periods import breakdown
+    run = service.run_id()
+    with db.connect() as conn:
+        rows = conn.execute("SELECT month, days_per_year, index_value, tier FROM monthly_scores "
+                            "WHERE run_id = ? AND hub_id = 'denver' AND hazard = 'total' ORDER BY month",
+                            (run,)).fetchall()
+        n = conn.execute("SELECT COUNT(*) FROM monthly_scores WHERE run_id = ?", (run,)).fetchone()[0]
+    expected = breakdown(service.by_id("denver"), "total", "month", [])
+    assert [(r[1], r[2], r[3]) for r in rows] == [(e["days_per_year"], e["index"], e["tier"]) for e in expected]
+    assert n == 50 * 7 * 12   # hubs x (6 hazards + total) x months

@@ -293,8 +293,11 @@ def rank(results: list[HubDisruption], hazard: str = "total", region: str | None
     sign = -1 if order == "most" else 1
     complete = sorted((r for r in pool if r.weather_complete), key=lambda r: (sign * value(r), r.hub_id))
     idx = load_scoring().index
-    ranking = [{"rank": i, "hub_id": r.hub_id, "city": r.city, "state": r.state, "region": r.region,
-                "days_per_year": value(r), "index": idx.index(value(r)), "tier": idx.tier(idx.index(value(r)))}
-               for i, r in enumerate(complete[:top_n], 1)]
+    n_months = 12 if months is None else len(months)  # the index compares like with like (pro-rated)
+    ranking = []
+    for i, r in enumerate(complete[:top_n], 1):
+        v = idx.index(value(r), n_months)
+        ranking.append({"rank": i, "hub_id": r.hub_id, "city": r.city, "state": r.state, "region": r.region,
+                        "days_per_year": value(r), "index": v, "tier": idx.tier(v)})
     return {"hazard": hazard, "region": region, "ranking": ranking,
             "excluded_incomplete_data": [r.hub_id for r in pool if not r.weather_complete]}

@@ -31,7 +31,9 @@ METHOD = {
     "index": ("standardised score: 100 = a typical hub (the median hub's total, fixed in the rules); "
               "index = 100 x days / reference days, for the total and for each hazard (hazard indices add "
               "up to the total); tiers: low < 50, moderate < 100, elevated < 150, high < 200, very high >= 200. "
-              "For a season or months, the index compares those days with a typical hub's WHOLE year"),
+              "For a month, season or set of months the reference is pro-rated: a month is compared with a "
+              "typical hub's average month (reference / 12), a season with 3/12 of it; so 12 monthly "
+              "indices average to the annual index"),
 }
 
 
@@ -67,10 +69,10 @@ def _leader(values: dict[str, float]) -> dict:
             "tied": top[0][1] == top[-1][1]}
 
 
-def _index(days: float) -> dict:
-    """Standardised index (100 = a typical hub's whole-year total) and tier, from the rule config."""
+def _index(days: float, months=None) -> dict:
+    """Standardised index (100 = a typical hub over the same period) and tier, from the rule config."""
     idx = load_scoring().index
-    i = idx.index(days)
+    i = idx.index(days, 12 if months is None else len(months))
     return {"index": i, "tier": idx.tier(i)}
 
 
@@ -153,7 +155,7 @@ def compare_hubs(args: CompareHubsInput) -> dict:
             return _hazard_detail(r, h, ranks[h], 2)
         v = views[r.hub_id].get(h, {"days_per_year": 0.0, "events_in_data": 0, "from_weather": 0.0,
                                      "from_fema_declarations": 0.0, "top_drivers": []})
-        return {"label": r.hazards[h].label, **v, **_index(v["days_per_year"]), "rank_among_hubs": ranks[h].get(r.hub_id),
+        return {"label": r.hazards[h].label, **v, **_index(v["days_per_year"], months), "rank_among_hubs": ranks[h].get(r.hub_id),
                 "fema_disasters_counted": [{"title": d.title, "incident_start": d.incident_begin_date,
                                             "days_counted": d.days} for d in r.declarations_counted
                                            if d.hazard == h and int((d.incident_begin_date or d.declaration_date)[5:7]) in months],
@@ -163,7 +165,7 @@ def compare_hubs(args: CompareHubsInput) -> dict:
     rows = [{
         "hub": {k: getattr(r, k) for k in ("hub_id", "city", "state", "region")},
         "total_days_per_year": round(total[r.hub_id], 3),
-        **_index(total[r.hub_id]),
+        **_index(total[r.hub_id], months),
         "overall_rank": ranks["total"].get(r.hub_id),
         "hazards": {h: detail(r, h) for h in hazards},
         "caveats": _caveats(r),

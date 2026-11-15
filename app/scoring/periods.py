@@ -7,6 +7,7 @@ so "days per year in winter" + the other three seasons = the annual total.
 """
 from collections import defaultdict
 
+from app.config import load_scoring
 from app.scoring.disruption import HubDisruption
 
 MONTH_NAMES = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
@@ -83,6 +84,7 @@ def breakdown(r: HubDisruption, hazard: str, by: str, years: list[int]) -> list[
     year: actual days in that calendar year: weather days of that year plus counted disasters whose
           incident started that year, at their full days (not averaged)."""
     rows = []
+    idx = load_scoring().index
     if by in ("month", "season"):
         periods = ([(MONTH_NAMES[m - 1], frozenset({m})) for m in range(1, 13)] if by == "month"
                    else list(SEASONS.items()))
@@ -91,7 +93,9 @@ def breakdown(r: HubDisruption, hazard: str, by: str, years: list[int]) -> list[
             by_hz = defaultdict(float)
             for x in recs:
                 by_hz[x.hazard] += _weight(r, x)
-            rows.append({"period": name, "days_per_year": round(sum(by_hz.values()), 3),
+            days = round(sum(by_hz.values()), 3)
+            i = idx.index(days, len(months))
+            rows.append({"period": name, "days_per_year": days, "index": i, "tier": idx.tier(i),
                          "events_in_data": len({x.event for x in recs}),
                          "main_hazard": max(by_hz, key=by_hz.get) if by_hz else None})
     else:
@@ -100,7 +104,21 @@ def breakdown(r: HubDisruption, hazard: str, by: str, years: list[int]) -> list[
             by_hz = defaultdict(float)
             for x in recs:
                 by_hz[x.hazard] += x.value
-            rows.append({"period": y, "days": round(sum(by_hz.values()), 3),
+            days = round(sum(by_hz.values()), 3)
+            i = idx.index(days)
+            rows.append({"period": y, "days": days, "index": i, "tier": idx.tier(i),
                          "events": len({x.event for x in recs}),
                          "main_hazard": max(by_hz, key=by_hz.get) if by_hz else None})
     return rows
+
+
+def monthly_scores(r: HubDisruption, hazards: list[str]) -> list[dict]:
+    """Days per year and index for every month, per hazard and for the total (one row each)."""
+    idx = load_scoring().index
+    out = []
+    for hz in ["total", *hazards]:
+        for m in range(1, 13):
+            days = period_days(r, hz, frozenset({m}))
+            i = idx.index(days, 1)
+            out.append({"hazard": hz, "month": m, "days_per_year": days, "index": i, "tier": idx.tier(i)})
+    return out

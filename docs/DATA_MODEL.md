@@ -37,6 +37,7 @@ flowchart LR
         DD["<b>DISRUPTION_DAYS</b><br/>~2,700 rows per run<br/><i>when, which hazard, why</i>"]
         HZ["<b>HAZARD_SCORES</b><br/>300 rows per run<br/><i>days per hazard + drivers</i>"]
         HR["<b>HUB_RESULTS</b><br/>50 rows per run<br/><i>the KPI: days per year</i>"]
+        MS["<b>MONTHLY_SCORES</b><br/>4,200 rows per run<br/><i>days + index per month</i>"]
     end
 
     Y --> H
@@ -52,6 +53,7 @@ flowchart LR
     SR --> DD
     DD -- "sum per hazard" --> HZ
     HZ -- "sum per hub" --> HR
+    DD -- "sum per month" --> MS
 
     classDef cache fill:#fff4e5,stroke:#d9822b,color:#3d2a12
     classDef sql fill:#e8f1fb,stroke:#3b78c3,color:#13263d
@@ -61,7 +63,7 @@ flowchart LR
     class HC,Y,RY cache
     class H,W,D,I sql
     class C chat
-    class RS,SR,DD,HZ,HR score
+    class RS,SR,DD,HZ,HR,MS score
     class L1,L2,L3 layer
 ```
 
@@ -80,6 +82,7 @@ flowchart LR
 | `DISRUPTION_DAYS` | SQLite (scoring) | Every disruption day and counted disaster after the rules: the source of all time breakdowns | scoring | month / season / year tools |
 | `HAZARD_SCORES` | SQLite (scoring) | Days per year per hub and hazard, with the rules behind them (drivers) | scoring | all tools, run comparison |
 | `HUB_RESULTS` | SQLite (scoring) | The KPI per hub, data coverage, FEMA disasters counted | scoring | all tools, `/rankings`, `/hubs` |
+| `MONTHLY_SCORES` | SQLite (scoring) | Days per year, index and tier per hub, hazard (and total) and month | scoring | SQL, dashboards (same values as `hub_breakdown`) |
 
 ## Columns
 
@@ -95,6 +98,7 @@ flowchart LR
 | `SCORING_RUNS` | **run_id**, rule_set_id, data_fingerprint, data_as_of, status (running / active / superseded), hubs, started_at, finished_at |
 | `DISRUPTION_DAYS` | **run_id**, **hub_id**, **date**, **hazard**, **event**, value, channel (weather / declarations), label (rule) |
 | `HAZARD_SCORES` | **run_id**, **hub_id**, **hazard**, label, days_per_year, index_value, tier, from_weather, from_declarations, events_per_year, drivers_json |
+| `MONTHLY_SCORES` | **run_id**, **hub_id**, **hazard** (or total), **month**, days_per_year, index_value (100 = a typical hub's average month), tier |
 | `HUB_RESULTS` | **run_id**, **hub_id**, total_days_per_year, index_value, tier, weather_complete, weather_coverage, weather_period, weather_years, declaration_years, weather_days_deduplicated, declarations_json |
 
 ## How scoring runs work

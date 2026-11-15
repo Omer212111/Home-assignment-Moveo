@@ -111,8 +111,11 @@ class IndexConfig(BaseModel):
             raise ValueError("index tiers must start at 0 and have strictly increasing lower bounds")
         return self
 
-    def index(self, days: float) -> float:
-        return round(100 * days / self.reference_days, 1)
+    def index(self, days: float, months: int = 12) -> float:
+        """100 = a typical hub over the same length of time: for a period of `months` months the
+        reference is pro-rated (a month is compared with a typical hub's average month, i.e.
+        reference_days / 12). The 12 monthly indices therefore average to the annual index."""
+        return round(100 * days / (self.reference_days * months / 12), 1)
 
     def tier(self, index: float) -> str:
         return [t.name for t in self.tiers if index >= t.min][-1]

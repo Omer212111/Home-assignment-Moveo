@@ -231,12 +231,13 @@ function renderDetails(res) {
   for (const c of calls0) {
     if (c.name === "hub_breakdown") {
       const r = c.result, hubs = r.hubs, key = r.by === "year" ? "days" : "days_per_year";
-      html += `<h3>By ${esc(r.by)} - ${r.by === "year" ? "actual days in the year" : "days / year in the period"}</h3>`
+      html += `<h3>By ${esc(r.by)} - ${r.by === "year" ? "actual days in the year" : "days / year in the period"} · index (100 = typical hub)</h3>`
            + "<table class='rank'><thead><tr><th>" + esc(r.by) + "</th>"
            + hubs.map(h => `<th class="num">${esc(h.hub.city)}</th>`).join("") + "</tr></thead><tbody>"
            + hubs[0].periods.map((p, j) => `<tr><td>${esc(String(p.period))}</td>` + hubs.map(h => {
                const v = h.periods[j], peak = String(h.highest_period) === String(v.period);
-               return `<td class="num">${peak ? "<b>" : ""}${v[key].toFixed(2)}${peak ? "</b>" : ""}</td>`;
+               const t = v.tier ? ` <span class="tier t-${esc(v.tier).replace(" ", "-")}" title="index ${Math.round(v.index)} (100 = typical hub)">${Math.round(v.index)}</span>` : "";
+               return `<td class="num">${peak ? "<b>" : ""}${v[key].toFixed(2)}${peak ? "</b>" : ""}${t}</td>`;
              }).join("") + "</tr>").join("") + "</tbody></table>"
            + `<p class="meta">${esc(r.small_sample_warning)}</p>`;
     }
