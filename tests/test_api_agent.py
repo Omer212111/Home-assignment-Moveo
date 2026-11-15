@@ -295,3 +295,17 @@ def test_error_rounds_do_not_count_and_ranking_attach_keeps_the_longest(api, mon
     assert fake.requests[3]["tool_choice"] == {"type": "none"}
     assert len(res.answer.ranking) == 50                 # eval run 3: not the later top 10
     assert all(r.get("cache_control") == {"type": "ephemeral"} for r in fake.requests)
+
+
+def test_optional_password_protects_everything_but_health(api, monkeypatch):
+    import base64
+    from app.settings import settings
+    monkeypatch.setattr(settings, "app_password", "s3cret")
+    assert api.get("/health").status_code == 200
+    r = api.get("/")
+    assert r.status_code == 401 and r.headers["www-authenticate"].startswith("Basic")
+    assert api.get("/rankings", headers={"Authorization": "Basic " + base64.b64encode(b"x:wrong").decode()}).status_code == 401
+    ok = {"Authorization": "Basic " + base64.b64encode(b"anyone:s3cret").decode()}
+    assert api.get("/rankings", headers=ok).status_code == 200
+    monkeypatch.setattr(settings, "app_password", None)
+    assert api.get("/").status_code == 200

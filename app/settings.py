@@ -36,6 +36,8 @@ class Settings(BaseSettings):
     # Alerts: outgoing webhook (Slack-compatible JSON; any receiver works). Unset: alerts are only
     # stored and shown at GET /alerts. ALERTS_TOKEN protects POST /alerts/check when set.
     alert_webhook_url: str | None = None
+    # Deployment: when set, the whole site asks for this password (HTTP Basic auth), except /health.
+    app_password: str | None = None
     alerts_token: str | None = None
     alerts_check_interval_seconds: int = 60   # outlook check + retry of pending deliveries
 

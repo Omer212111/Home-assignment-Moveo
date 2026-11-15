@@ -1,0 +1,18 @@
+# Render Blueprint: New > Blueprint in the Render dashboard, pick this repository, and Render
+# creates the web service from the Dockerfile. Secrets are asked for in the dashboard (sync: false).
+services:
+  - type: web
+    name: hub-weather-risk
+    runtime: docker
+    plan: free                 # free: sleeps after 15 min idle (~1 min cold start); starter: always on
+    healthCheckPath: /health
+    autoDeploy: true           # redeploy on every push to main
+    envVars:
+      - key: ANTHROPIC_API_KEY
+        sync: false            # required: entered in the dashboard, never committed
+      - key: APP_PASSWORD
+        sync: false            # recommended: protects the public URL (/chat spends API credits)
+      - key: ALERT_WEBHOOK_URL
+        sync: false            # optional: where alerts are posted
+      - key: LLM_MODEL
+        value: claude-sonnet-5-5

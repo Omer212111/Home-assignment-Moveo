@@ -3,6 +3,8 @@
     uv run uvicorn app.main:app --reload       ->  http://127.0.0.1:8000/docs
 """
 import asyncio
+import base64
+import secrets
 import logging
 import uuid
 from typing import Literal
@@ -11,7 +13,7 @@ from datetime import datetime, timezone
 
 from pathlib import Path
 
-from fastapi import FastAPI, Header, HTTPException, Query
+from fastapi import FastAPI, Header, HTTPException, Query, Request, Response
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 
@@ -51,6 +53,25 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="Weather Risk Intelligence Agent", version="0.1.0", lifespan=lifespan)
+
+
+@app.middleware("http")
+async def password_protection(request: Request, call_next):
+    """Optional protection for a public URL: with APP_PASSWORD set, every page and endpoint asks for
+    it (HTTP Basic auth: the browser shows its own login prompt; any user name). /chat spends API
+    credits, so a public demo should not be open to anyone. /health stays open for health checks."""
+    if not settings.app_password or request.url.path == "/health":
+        return await call_next(request)
+    auth = request.headers.get("authorization", "")
+    if auth.lower().startswith("basic "):
+        try:
+            _, _, password = base64.b64decode(auth[6:]).decode().partition(":")
+        except (ValueError, UnicodeDecodeError):
+            password = ""
+        if secrets.compare_digest(password.encode(), settings.app_password.encode()):
+            return await call_next(request)
+    return Response("Authentication required", status_code=401,
+                    headers={"WWW-Authenticate": 'Basic realm="Hub Weather Risk"'})
 
 
 STATIC = Path(__file__).parent / "static"

@@ -77,7 +77,7 @@ How one chat question flows through the agent: [section 4](#4-the-agent).
 ---
 
 ## Contents
-1. [Quick start](#1-quick-start)
+1. [Run it](#1-run-it) · [Deploy to a URL](#1a-deploy-to-a-url-render)
 2. [Using the chat](#2-using-the-chat)
 3. [The KPI and the scoring engine](#3-the-kpi-and-the-scoring-engine)
 4. [The agent](#4-the-agent)
@@ -93,11 +93,15 @@ How one chat question flows through the agent: [section 4](#4-the-agent).
 
 ---
 
-## 1. Quick start
+## 1. Run it
 
-Requirements: Python 3.12+, [uv](https://docs.astral.sh/uv/), an Anthropic API key (for the chat
-and the evals only). The weather and disaster data are already in the repository
-(`data/snapshot/`), so no data download is needed.
+Requirements: an Anthropic API key (only the chat and the evals use it). The weather and disaster
+data are in the repository (`data/snapshot/`), so nothing is downloaded at startup.
+
+### Option A: locally with uv (development)
+
+Install [uv](https://docs.astral.sh/uv/getting-started/installation/) (it installs Python 3.12+ if
+needed), clone the repository, and in its folder:
 
 **1. Install dependencies**
 
@@ -105,8 +109,8 @@ and the evals only). The weather and disaster data are already in the repository
 uv sync
 ```
 
-**2. Add your API key.** Copy `.env.example` to `.env` (in the repository root, next to
-`pyproject.toml`) and set `ANTHROPIC_API_KEY`.
+**2. Add your API key.** Copy `.env.example` to `.env` (next to `pyproject.toml`) and set
+`ANTHROPIC_API_KEY=...` in it.
 
 Windows PowerShell:
 
@@ -128,12 +132,30 @@ uv run uvicorn app.main:app --reload
 
 - Chat: http://127.0.0.1:8000/
 - API docs (Swagger): http://127.0.0.1:8000/docs
+- The first start scores all hubs (~1 s) and stores a scoring run; later starts reuse it.
 
-**4. Check everything works without an API key** (offline tests, ~10 s):
+**4. Check everything works without an API key** (offline tests, ~30 s):
 
 ```
 uv run pytest -q
 ```
+
+### Option B: with Docker (the same image as the deployment)
+
+```
+docker build -t hub-weather-risk .
+```
+
+```
+docker run -p 8000:8000 --env-file .env hub-weather-risk
+```
+
+Then open http://127.0.0.1:8000/. The image contains the app, the rules and the data snapshot; it
+runs as a non-root user with a health check on `/health`.
+
+### Option C: deployed to a URL
+
+See [section 1a](#1a-deploy-to-a-url-render).
 
 ### Settings (`.env`)
 
@@ -146,7 +168,45 @@ uv run pytest -q
 | `REDIS_URL` | (none) | Optional: keep the raw API cache in Redis instead of files (section 7) |
 | `ALERT_WEBHOOK_URL` | (none) | Optional: where alerts are POSTed (Slack-compatible JSON); without it they are stored and shown in the page |
 | `ALERTS_TOKEN` | (none) | Optional: token required by `POST /alerts/check` |
+| `APP_PASSWORD` | (none) | Optional: password for the whole site (HTTP Basic auth, any user name), except `/health`. Set it on a public URL |
 | `OPEN_METEO_API_KEY` | (none) | Optional: paid Open-Meteo key, only for re-downloading weather |
+
+---
+
+## 1a. Deploy to a URL (Render)
+
+The repository includes a `Dockerfile` and a Render Blueprint (`render.yaml`), so deploying is a few
+clicks. Render builds the image from GitHub and redeploys on every push to `main`.
+
+**1. Create the service**
+1. Sign in at [render.com](https://render.com) with your GitHub account.
+2. **New > Blueprint**, select this repository, branch `main`. Render reads `render.yaml` and
+   proposes one web service, `hub-weather-risk` (Docker, health check `/health`).
+3. It asks for the secret values (never committed):
+   - `ANTHROPIC_API_KEY`: **required** for the chat.
+   - `APP_PASSWORD`: **strongly recommended**. Anyone who finds the URL could otherwise use the chat
+     on your API credits. With it set, the browser asks for a password (any user name).
+   - `ALERT_WEBHOOK_URL`: optional, where alerts are posted (leave empty to see them in the page).
+4. **Apply**. The first build takes a few minutes; the URL is shown at the top of the service page
+   (`https://hub-weather-risk-xxxx.onrender.com`).
+
+**2. Check it**
+- `https://<your-url>/health` returns `{"status": "ok", "hubs": 50, ...}` (no password needed).
+- Open `https://<your-url>/`, enter the password, ask "What are the 10 most dangerous hubs?".
+
+**Good to know**
+- **Free plan sleeps after 15 minutes without traffic**; the next request wakes it in about a
+  minute. Before a demo, open the URL a few minutes early (or use the Starter plan, always on).
+- **No persistent disk on the free plan**: on every restart or deploy the database is rebuilt from
+  the snapshot in the image and scored again (~1 s). Chat history, trajectories and alerts start
+  empty; the scores and data are always the same. A persistent disk (paid) or Postgres would keep them.
+- **One instance, one worker**: the score cache and the alert loop run in the process; the design is
+  safe with several instances (`docs/DESIGN_DECISIONS.md` section 21), but one is enough here.
+- **Cost control**: set a monthly spend limit on the API key's workspace in the Anthropic Console;
+  a chat question costs about $0.03.
+- **Without the Blueprint**: New > Web Service, pick the repository, runtime **Docker**, health check
+  path `/health`, and add the same environment variables. Any Docker host works the same way
+  (Fly.io, Railway, Google Cloud Run, Azure Container Apps): the app listens on `$PORT`.
 
 ---
 
@@ -310,7 +370,7 @@ Two layers:
 
 | Layer | Checks | Command | Cost |
 |---|---|---|---|
-| Unit tests (`tests/`, 84 tests) | Scoring rules, time breakdowns, stored scoring runs, ingestion, API, agent loop with a scripted fake Claude, the eval checks themselves, Redis cache | `uv run pytest -q` | free, offline |
+| Unit tests (`tests/`, 85 tests) | Scoring rules, time breakdowns, stored scoring runs, ingestion, API, agent loop with a scripted fake Claude, the eval checks themselves, Redis cache | `uv run pytest -q` | free, offline |
 | Agent evals (`evals/`, 15 cases / 17 turns) | The real model on edge cases: the 4 assignment questions, a city that is not a hub, "top 100" when only 50 exist, follow-ups, "winter" hazard vs season, safest hubs, worst month, per-year comparison, hurricane season | `uv run python -m evals.run` | ~$0.55 |
 
 Checks on every turn: valid answer format, the right tool with the right arguments, ranking equal
@@ -472,9 +532,9 @@ Every answer from the agent carries `assumptions`, `confidence` and `uncertainty
 ## 12. Status and next steps
 
 Built: data ingestion, scoring engine, time breakdowns, 5-tool agent with guardrails, API, chat
-page with agent-step view, trajectories, Redis cache, scores stored per scoring run, standardised index and tiers (also per month), scoring triggered by ingestion, alerts (monthly outlook + score change) safe under concurrency, 84 tests, 15-case eval set (run 7: 110/111).
+page with agent-step view, trajectories, Redis cache, scores stored per scoring run, standardised index and tiers (also per month), scoring triggered by ingestion, alerts (monthly outlook + score change) safe under concurrency, Docker image and Render blueprint, 85 tests, 15-case eval set (run 7: 110/111).
 
-Next (in order): refresh `docs/ARCHITECTURE.md`; deploy (Docker on Render); bonus: voice input
+Next (in order): refresh `docs/ARCHITECTURE.md`; bonus: voice input
 (browser Web Speech API); live NWS alerts for storms in the coming days. Longer-term improvements (cost in
 dollars, tail risk, FEMA National Risk Index, uncertainty ranges) are in `docs/IMPROVEMENTS.md`.
 

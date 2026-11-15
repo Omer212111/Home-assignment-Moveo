@@ -59,7 +59,7 @@ def client() -> anthropic.Anthropic:
     if _client is None:
         key = settings.agent_anthropic_api_key or settings.anthropic_api_key
         if not key:
-            raise AgentError("No API key: set ANTHROPIC_API_KEY (or AGENT_ANTHROPIC_API_KEY) in .env")
+            raise AgentError("No API key: set ANTHROPIC_API_KEY (in .env locally, or as an environment variable on the host)")
         _client = anthropic.Anthropic(api_key=key)
     return _client
 
