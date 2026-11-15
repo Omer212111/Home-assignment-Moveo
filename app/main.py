@@ -2,6 +2,7 @@
 
     uv run uvicorn app.main:app --reload       ->  http://127.0.0.1:8000/docs
 """
+import logging
 import uuid
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
@@ -15,6 +16,7 @@ from app.agent.schemas import Hazard, Region
 from app.scoring import service
 from app.scoring.disruption import HubDisruption, rank
 
+log = logging.getLogger("weather_agent")
 HISTORY_TURNS = 6  # earlier question/answer pairs sent with each new question
 
 
@@ -82,6 +84,10 @@ def chat(req: ChatRequest):
     try:
         result = ask(req.message, _history(session_id))
     except AgentError as exc:
+        log.warning("agent error: %s", exc)
         raise HTTPException(502, str(exc)) from exc
+    except Exception as exc:  # unexpected: full traceback in the server log, short message to the client
+        log.exception("unexpected error in /chat")
+        raise HTTPException(500, f"Unexpected error: {type(exc).__name__}: {exc}") from exc
     _save(session_id, req.message, result.answer.model_dump_json())
     return ChatResponse(session_id=session_id, result=result)

@@ -56,15 +56,10 @@ def _final_text(content) -> str | None:
     return texts[-1] if texts else None
 
 
-def ask(question: str, history: list[dict] | None = None) -> AgentResult:
-    """Answer one question. `history` is earlier turns as plain {role, content: str} messages."""
-    messages = [*(history or []), {"role": "user", "content": question}]
-    calls: list[ToolCall] = []
-    tokens_in = tokens_out = 0
-    retried_schema = False
-
-    for step in range(1, MAX_STEPS + 1):
-        response = client().beta.messages.parse(
+def _call_model(messages: list) -> object:
+    """One Messages API call. API failures become AgentError with a readable message."""
+    try:
+        return client().beta.messages.parse(
             model=settings.llm_model,
             max_tokens=16000,
             system=SYSTEM_PROMPT,
@@ -75,6 +70,25 @@ def ask(question: str, history: list[dict] | None = None) -> AgentResult:
             betas=[FALLBACK_BETA],
             fallbacks="default",  # if the model declines, the API retries on a fallback model
         )
+    except anthropic.AuthenticationError as exc:
+        raise AgentError("Anthropic API rejected the key (401): check ANTHROPIC_API_KEY in .env") from exc
+    except anthropic.RateLimitError as exc:
+        raise AgentError("Anthropic API rate limit (429): wait a moment and retry") from exc
+    except anthropic.APIStatusError as exc:
+        raise AgentError(f"Anthropic API error {exc.status_code}: {exc.message}") from exc
+    except anthropic.APIConnectionError as exc:
+        raise AgentError(f"Cannot reach the Anthropic API: {exc}") from exc
+
+
+def ask(question: str, history: list[dict] | None = None) -> AgentResult:
+    """Answer one question. `history` is earlier turns as plain {role, content: str} messages."""
+    messages = [*(history or []), {"role": "user", "content": question}]
+    calls: list[ToolCall] = []
+    tokens_in = tokens_out = 0
+    retried_schema = False
+
+    for step in range(1, MAX_STEPS + 1):
+        response = _call_model(messages)
         tokens_in += response.usage.input_tokens
         tokens_out += response.usage.output_tokens
 

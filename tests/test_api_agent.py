@@ -130,3 +130,61 @@ def test_chat_endpoint_keeps_history(api, monkeypatch):
     msgs = fake.requests[1]["messages"]
     assert [m["role"] for m in msgs] == ["user", "assistant", "user"]
     assert msgs[0]["content"] == "first question" and msgs[-1]["content"] == "follow-up"
+
+
+# ---------------------------------------------------------------- real SDK against a fake network
+
+def _sdk_client(responses, captured):
+    """A real anthropic client whose HTTP layer returns canned API responses."""
+    import anthropic
+    import httpx2
+
+    def handler(request):
+        captured.append(json.loads(request.content))
+        status, body = responses.pop(0)
+        return httpx2.Response(status, json=body)
+    return anthropic.Anthropic(api_key="test", max_retries=0,
+                               http_client=httpx2.Client(transport=httpx2.MockTransport(handler)))
+
+
+def _api_message(stop_reason, content):
+    return {"id": "msg_1", "type": "message", "role": "assistant", "model": "claude-sonnet-5-5",
+            "content": content, "stop_reason": stop_reason, "stop_sequence": None,
+            "usage": {"input_tokens": 100, "output_tokens": 20}}
+
+
+def test_tool_schema_has_no_unsupported_constraints():
+    schema = json.dumps(tool_definitions()[0]["input_schema"])
+    assert '"minimum"' not in schema and '"maximum"' not in schema
+
+
+def test_real_sdk_round_trip(api, monkeypatch):
+    captured = []
+    fake = _sdk_client([
+        (200, _api_message("tool_use", [{"type": "tool_use", "id": "tu_1", "name": "rank_hubs",
+                                         "input": {"hazard": "total", "region": None, "top_n": 3}}])),
+        (200, _api_message("end_turn", [{"type": "text", "text": _answer()}])),
+    ], captured)
+    monkeypatch.setattr(loop, "client", lambda: fake)
+    res = loop.ask("Which hubs are most dangerous?")
+    assert res.answer.confidence == "medium" and [c.name for c in res.tool_calls] == ["rank_hubs"]
+    first, second = captured
+    assert first["output_config"]["effort"] == "low" and first["output_config"]["format"]["type"] == "json_schema"
+    assert first["tools"][0]["strict"] is True and first["fallbacks"] == "default"
+    assert second["messages"][-1]["content"][0]["type"] == "tool_result"
+
+
+def test_api_error_becomes_readable_agent_error(api, monkeypatch):
+    fake = _sdk_client([(400, {"type": "error", "error": {"type": "invalid_request_error",
+                                                          "message": "bad schema"}})], [])
+    monkeypatch.setattr(loop, "client", lambda: fake)
+    with pytest.raises(loop.AgentError, match="400.*bad schema"):
+        loop.ask("hi")
+
+
+def test_chat_returns_502_with_message_on_api_error(api, monkeypatch):
+    fake = _sdk_client([(401, {"type": "error", "error": {"type": "authentication_error",
+                                                          "message": "invalid x-api-key"}})], [])
+    monkeypatch.setattr(loop, "client", lambda: fake)
+    r = api.post("/chat", json={"message": "hi"})
+    assert r.status_code == 502 and "rejected the key" in r.json()["detail"]

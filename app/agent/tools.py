@@ -1,5 +1,6 @@
 """Tools the agent can call. Plain Python over the deterministic engine: the LLM picks
 the tool and the arguments, the numbers always come from here."""
+import anthropic
 from pydantic import BaseModel, ValidationError
 
 from app.agent.schemas import RankHubsInput
@@ -58,8 +59,12 @@ TOOLS: dict[str, tuple[type[BaseModel], callable, str]] = {
 
 
 def tool_definitions() -> list[dict]:
-    """Tool definitions for the Messages API, with strict JSON schemas generated from Pydantic."""
-    return [{"name": name, "description": desc, "input_schema": model.model_json_schema(), "strict": True}
+    """Tool definitions for the Messages API, with strict JSON schemas generated from Pydantic.
+
+    transform_schema converts the Pydantic schema to what strict mode supports: constraints such
+    as minimum/maximum are moved into the description (Pydantic still enforces them in run_tool).
+    """
+    return [{"name": name, "description": desc, "input_schema": anthropic.transform_schema(model), "strict": True}
             for name, (model, _, desc) in TOOLS.items()]
 
 
