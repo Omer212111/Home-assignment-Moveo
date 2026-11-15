@@ -20,7 +20,7 @@ class Settings(BaseSettings):
 
     # Config files
     hubs_file: Path = ROOT / "config" / "hubs.yaml"
-    scoring_file: Path = ROOT / "config" / "scoring.yaml"
+    scoring_file: Path = ROOT / "config" / "disruption.yaml"
 
     # Data window: 5 full calendar years (see docs/PLAN.md, "History window")
     history_start: str = "2021-01-01"

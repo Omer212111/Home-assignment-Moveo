@@ -1,0 +1,53 @@
+# Disruption-days model: the KPI is EXPECTED DISRUPTION DAYS PER YEAR per hub.
+#
+# One "disruption day" = one full operating day lost. Partial disruption counts
+# as a fraction (severity 0.3 = the hub runs at 70% capacity that day).
+#
+# Two channels:
+#  1. Weather channel (frequent events): daily Open-Meteo data, 5 years.
+#     - each day takes the WORST matching rule across all hazards (a day is never counted twice)
+#     - consecutive trigger days form one event; the recovery tail is added once,
+#       after the event ends, and is cut short if another event starts
+#  2. Declarations channel (rare events): FEMA major-disaster (DR) declarations over 20 years.
+#     Hurricanes and tornadoes are too rare / too local for 5 years of gridded weather.
+#     Weather days inside a counted declaration's event window are dropped (no double counting).
+#
+# ALL NUMBERS BELOW ARE EXPERT JUDGMENT, NOT CALIBRATED. With the company's own
+# downtime logs they should be fitted (e.g. regression of actual downtime on these triggers).
+
+recovery_severity: 1.0   # severity of a recovery-tail day (1.0 = a full lost day)
+
+hazards:
+  winter: Winter storms, snow and ice
+  flood: Extreme rain and flooding
+  high_wind: High wind
+  heat: Extreme heat
+  tropical: Hurricanes and tropical storms
+  severe_storm: Severe storms and tornadoes
+
+# Weather rules. op: ">=" or "<=" against a daily value, or "in" against a list (weather codes).
+weather_rules:
+  - {hazard: winter,    variable: snowfall_sum,   op: ">=", threshold: 25,   severity: 1.0,  recovery_days: 2, label: "Snow >= 25 cm: hub closed"}
+  - {hazard: winter,    variable: snowfall_sum,   op: ">=", threshold: 10,   severity: 1.0,  recovery_days: 1, label: "Snow >= 10 cm: hub closed"}
+  - {hazard: winter,    variable: snowfall_sum,   op: ">=", threshold: 1,    severity: 0.3,  recovery_days: 0, label: "Snow 1-10 cm: slowed"}
+  - {hazard: winter,    variable: weather_code,   op: "in", threshold: [56, 57, 66, 67], severity: 1.0, recovery_days: 1, label: "Freezing rain / drizzle: ice"}
+  - {hazard: winter,    variable: tmin,           op: "<=", threshold: -18,  severity: 0.25, recovery_days: 0, label: "Min temp <= -18 C: extreme cold"}
+  - {hazard: flood,     variable: precip_sum,     op: ">=", threshold: 100,  severity: 1.0,  recovery_days: 2, label: "Rain >= 100 mm: flooding"}
+  - {hazard: flood,     variable: precip_sum,     op: ">=", threshold: 50,   severity: 0.5,  recovery_days: 0, label: "Rain >= 50 mm: local flooding"}
+  - {hazard: high_wind, variable: wind_gusts_max, op: ">=", threshold: 90,   severity: 1.0,  recovery_days: 0, label: "Gusts >= 90 km/h: operations stopped"}
+  - {hazard: high_wind, variable: wind_gusts_max, op: ">=", threshold: 75,   severity: 0.5,  recovery_days: 0, label: "Gusts >= 75 km/h: dock/trailer work limited"}
+  - {hazard: heat,      variable: tmax,           op: ">=", threshold: 38,   severity: 0.15, recovery_days: 0, label: "Max temp >= 38 C: shortened shifts"}
+
+# Declaration rules: only these incident types are counted in this channel. Winter and
+# flood declarations are NOT counted here, because the weather channel already measures them.
+declaration_types_counted: [DR]   # EM declarations are mostly evacuee support (e.g. Dallas for Harvey)
+declaration_window_years: 20
+declaration_rules:
+  - {hazard: tropical,     incident_types: [Hurricane, Tropical Storm, Typhoon, Coastal Storm], days_per_event: 5.0, label: "Hurricane / tropical storm: pre-landfall shutdown + power restoration"}
+  - {hazard: severe_storm, incident_types: [Severe Storm, Tornado], days_per_event: 1.5, label: "Severe storm / tornado: damage and outages"}
+
+# Weather days within this many days of a counted declaration's incident start are
+# attributed to the declaration, not the weather channel.
+declaration_dedup_window_days: 5
+
+min_weather_coverage: 0.95   # share of days needed for a hub's weather channel to count as complete
