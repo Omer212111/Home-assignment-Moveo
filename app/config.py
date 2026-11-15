@@ -84,12 +84,12 @@ class ScoringConfig(BaseModel):
 
 @lru_cache
 def load_hubs() -> list[Hub]:
-    return HubsFile.model_validate(yaml.safe_load(settings.hubs_file.read_text())).hubs
+    return HubsFile.model_validate(yaml.safe_load(settings.hubs_file.read_text(encoding="utf-8"))).hubs
 
 
 @lru_cache
 def load_scoring() -> ScoringConfig:
-    return ScoringConfig.model_validate(yaml.safe_load(settings.scoring_file.read_text()))
+    return ScoringConfig.model_validate(yaml.safe_load(settings.scoring_file.read_text(encoding="utf-8")))
 
 
 def scoring_version() -> str:

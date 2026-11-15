@@ -49,10 +49,10 @@ def cached_get_json(source: str, url: str, params: dict, refresh: bool = False) 
     """Return (json, cache_file, from_cache). Only successful responses are cached."""
     path = _cache_path(source, url, params)
     if path.exists() and not refresh:
-        return json.loads(path.read_text()), path, True
+        return json.loads(path.read_text(encoding="utf-8")), path, True
     data = _get(url, params)
     if isinstance(data, dict) and data.get("error"):
         raise SourceError(f"{source}: {data.get('reason', data)}")
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(data))
+    path.write_text(json.dumps(data), encoding="utf-8")
     return data, path, False

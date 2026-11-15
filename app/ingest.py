@@ -114,7 +114,13 @@ def main(argv=None):
     p.add_argument("--end", default=settings.history_end)
     p.add_argument("--refresh", action="store_true", help="ignore the raw cache and call the APIs again")
     p.add_argument("--no-snapshot", action="store_true", help="do not export the parquet snapshot")
+    p.add_argument("--status", action="store_true", help="only show what is in the database, download nothing")
     args = p.parse_args(argv)
+
+    if args.status:
+        db.restore_snapshot()
+        print_status()
+        return
 
     hubs = load_hubs()
     if args.hubs:
