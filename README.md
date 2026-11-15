@@ -139,6 +139,19 @@ Months and seasons always add up to the annual total (tested for all 50 hubs and
 Current top of the ranking: Boston 13.1, Minneapolis 11.7, Denver 10.3, Milwaukee 10.3,
 Chicago 9.6 days/yr (winter-driven). Safest: San Diego 0.2.
 
+**Scores are stored per scoring run** in SQLite (`docs/DATA_MODEL.md`). At startup the server
+reuses the active run if the rules and data are unchanged, otherwise it scores and stores a new
+one. After editing `config/disruption.yaml`:
+
+```
+uv run python -m app.scoring.store --new
+uv run python -m app.scoring.store
+uv run python -m app.scoring.store --diff 1 2
+```
+
+(score again; list runs; what changed between two runs). A running server picks up the new run
+within 5 seconds.
+
 Ranking without the LLM, from the command line:
 
 ```
@@ -187,7 +200,7 @@ eval cost.
 | Endpoint | LLM | Description |
 |---|---|---|
 | `GET /` | - | The chat page |
-| `GET /health` | no | Status, number of hubs scored |
+| `GET /health` | no | Status, number of hubs scored, active scoring run and data date |
 | `GET /rankings?hazard=&region=&top_n=&season=&order=` | no | Deterministic ranking, e.g. `?season=summer` or `?order=least` |
 | `GET /hubs/{hub_id}` | no | Full breakdown of one hub: hazards, drivers, counted FEMA disasters |
 | `POST /chat` | yes | `{"message": "...", "session_id": null}` -> answer, ranking, tool calls, trajectory, tokens |
@@ -206,7 +219,7 @@ Two layers:
 
 | Layer | Checks | Command | Cost |
 |---|---|---|---|
-| Unit tests (`tests/`, 58 tests) | Scoring rules, time breakdowns, ingestion, API, agent loop with a scripted fake Claude, the eval checks themselves, Redis cache | `uv run pytest -q` | free, offline |
+| Unit tests (`tests/`, 62 tests) | Scoring rules, time breakdowns, stored scoring runs, ingestion, API, agent loop with a scripted fake Claude, the eval checks themselves, Redis cache | `uv run pytest -q` | free, offline |
 | Agent evals (`evals/`, 15 cases / 17 turns) | The real model on edge cases: the 4 assignment questions, a city that is not a hub, "top 100" when only 50 exist, follow-ups, "winter" hazard vs season, safest hubs, worst month, per-year comparison, hurricane season | `uv run python -m evals.run` | ~$0.55 |
 
 Checks on every turn: valid answer format, the right tool with the right arguments, ranking equal
@@ -305,7 +318,7 @@ Diagrams and component table: `docs/ARCHITECTURE.md`.
 | Raw API cache | **Redis** (`REDIS_URL`) or JSON files in `data/raw/` | Original API responses, never expire | Protects the Open-Meteo quota; audit trail ("where did this number come from?"); Redis shares one cache across machines, files work with no server |
 | Snapshot | Parquet in `data/snapshot/` (828 KB, in git) | Cleaned tables: hubs, daily weather, declarations, ingest log | Reproducible: any clone has exactly the data behind the numbers |
 | Database | **SQLite** (`data/weather_risk.db`, rebuilt at startup) | The same tables + chat conversations | Small relational data, SQL for checks, no server to run; one container needs no more |
-| Scores | In memory | Computed scores and per-day disruption records | Recomputed in ~1 s at startup; data only changes when ingestion runs |
+| Scores | **SQLite scoring tables**, one set per scoring run (`rule_sets`, `scoring_runs`, `hub_results`, `hazard_scores`, `disruption_days`); the active run cached in memory | KPI per hub and hazard, drivers, every disruption day | Every score traceable to the exact rules and data; runs can be compared (risk-change alerts); a new run reaches the running server without a restart |
 | Trajectories | JSON files (`data/trajectories/`, `evals/trajectories/`) | Step-by-step record of each question | Easy to open, diff and attach to a bug report |
 
 All tables and how they connect: `docs/DATA_MODEL.md` (entity-relationship diagram).
@@ -329,7 +342,8 @@ app/
   scoring/
     disruption.py       the rules engine: disruption days per hub and hazard, ranking
     periods.py          month / season / year breakdowns
-    service.py          scores kept in memory
+    store.py            scores in the database: scoring runs, load, compare
+    service.py          the active run, cached in memory
     report.py           ranking from the command line
   agent/
     schemas.py          JSON contracts: tool inputs, ModelAnswer, AgentAnswer
@@ -377,7 +391,7 @@ Every answer from the agent carries `assumptions`, `confidence` and `uncertainty
 ## 12. Status and next steps
 
 Built: data ingestion, scoring engine, time breakdowns, 5-tool agent with guardrails, API, chat
-page with agent-step view, trajectories, Redis cache, 58 tests, 15-case eval set (run 7: 110/111).
+page with agent-step view, trajectories, Redis cache, scores stored per scoring run, 62 tests, 15-case eval set (run 7: 110/111).
 
 Next (in order): refresh `docs/ARCHITECTURE.md`; deploy (Docker on Render); bonus: voice input
 (browser Web Speech API) and an alert when a hub's score changes. Longer-term improvements (cost in

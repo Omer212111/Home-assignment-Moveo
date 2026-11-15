@@ -18,6 +18,7 @@ from app import db
 from app.agent import trajectory
 from app.agent.loop import AgentError, AgentResult, ask
 from app.agent.schemas import Hazard, Region, Season
+from app.scoring import store
 from app.scoring.periods import SEASONS
 from app.scoring import service
 from app.scoring.disruption import HubDisruption, rank
@@ -49,7 +50,9 @@ def index():
 @app.get("/health")
 def health():
     res = service.results()
-    return {"status": "ok", "hubs": len(res), "hubs_complete": sum(r.weather_complete for r in res)}
+    run = store.active_run()
+    return {"status": "ok", "hubs": len(res), "hubs_complete": sum(r.weather_complete for r in res),
+            "scoring_run": service.run_id(), "data_as_of": run and run["data_as_of"]}
 
 
 @app.get("/rankings")

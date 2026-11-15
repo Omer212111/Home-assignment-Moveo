@@ -1,33 +1,60 @@
-"""Current disruption results, computed once from the database and kept in memory.
+"""Current disruption results: stored in the database, cached in memory.
 
-50 hubs x 1,826 days takes about a second, so recomputing at startup (or after
-a data refresh) is simpler than storing results in another table.
+The scores live in the scoring tables (app/scoring/store.py): one 'active' scoring run per set of
+rules and data. At startup the service restores the snapshot, makes sure the active run matches
+the current rules and data (scoring and storing a new run if not, ~1 s), and loads that run.
+
+The in-memory copy is only a cache of the active run. Every few seconds results() checks whether
+another run became active (e.g. `python -m app.scoring.store --new` after editing the rules) and
+reloads it, so new scores reach a running server without a restart.
 """
-from datetime import date
+import time
 
 from app import db
-from app.config import load_hubs, load_scoring
-from app.scoring.disruption import HubDisruption, compute_all
-from app.settings import settings
+from app.config import load_hubs
+from app.scoring import store
+from app.scoring.disruption import HubDisruption
+
+RELOAD_CHECK_SECONDS = 5.0
 
 _RESULTS: list[HubDisruption] | None = None
+_RUN_ID: int | None = None
+_CHECKED_AT = 0.0
 _WEATHER = None  # daily weather of all hubs (pandas DataFrame), for weather statistics
 
 
 def load_results(restore: bool = True) -> list[HubDisruption]:
-    global _RESULTS, _WEATHER
+    global _RESULTS, _RUN_ID, _CHECKED_AT, _WEATHER
     if restore:
         db.restore_snapshot()
-    window = (date.fromisoformat(settings.history_start), date.fromisoformat(settings.history_end))
     _WEATHER = db.read_df("SELECT * FROM daily_weather ORDER BY hub_id, date")
-    _RESULTS = compute_all(_WEATHER,
-                           db.read_df("SELECT * FROM disaster_declarations"),
-                           db.read_df("SELECT * FROM hubs ORDER BY pop_rank"), load_scoring(), window)
+    _RUN_ID = store.ensure_current()
+    _RESULTS = store.load_run(_RUN_ID)
+    _CHECKED_AT = time.monotonic()
     return _RESULTS
 
 
+def _refresh_if_new_run() -> None:
+    global _RESULTS, _RUN_ID, _CHECKED_AT
+    if time.monotonic() - _CHECKED_AT < RELOAD_CHECK_SECONDS:
+        return
+    _CHECKED_AT = time.monotonic()
+    active = store.active_run_id()
+    if active is not None and active != _RUN_ID:
+        _RESULTS, _RUN_ID = store.load_run(active), active
+
+
 def results() -> list[HubDisruption]:
-    return _RESULTS if _RESULTS is not None else load_results()
+    if _RESULTS is None:
+        return load_results()
+    _refresh_if_new_run()
+    return _RESULTS
+
+
+def run_id() -> int | None:
+    """The scoring run the current answers come from."""
+    results()
+    return _RUN_ID
 
 
 def weather(hub_id: str):

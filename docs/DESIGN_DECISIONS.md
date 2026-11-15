@@ -87,6 +87,7 @@ The settings library reads `.env` but **does not** pass its values to the Anthro
 - Computing on every request repeats the same work: about a second of pandas processing per request.
 - Storing in a table adds a layer that has to be kept in sync.
 - Chosen: **compute once at startup, keep in memory**. The data only changes when a new download happens, and recomputing takes a second. It is the simplest solution that is also fast.
+- *Superseded by section 17:* the scores now live in database tables, versioned by scoring run; memory is only a cache of the active run.
 
 ---
 
@@ -372,3 +373,37 @@ What Redis adds over files: one cache shared by every machine or ingestion worke
 and a natural home for the planned live data (NWS alerts with a short TTL). What it costs: a server
 to run (Docker locally; a managed Redis when deployed) and the cache is no longer visible in git.
 The running API does not use this cache at all; it starts from the parquet snapshot.
+
+---
+
+## 17. Scores in database tables, versioned by scoring run (`app/scoring/store.py`)
+
+**Decision (user's choice): the scores move from memory into SQLite tables**: `rule_sets`,
+`scoring_runs`, `hub_results`, `hazard_scores`, `disruption_days` (`docs/DATA_MODEL.md`).
+The unused early `hub_scores` table is dropped.
+
+Measured before deciding the details: full scoring 1.1 s, writing a run 0.02 s, loading a run
+0.05 s; a run is 50 + 300 + 2,712 rows.
+
+How it works:
+- **A scoring run records what produced it**: the hash and full text of `config/disruption.yaml`
+  (`rule_sets`) and a fingerprint of the snapshot files. At startup, if the active run matches
+  the current rules and data it is loaded; otherwise the engine scores and stores a new run. The
+  second start of an unchanged repository therefore does no scoring.
+- **Activation is atomic**: the inserts and the switch of `active` happen in one transaction.
+- **Memory is a cache of the active run, not the source of truth.** Tools still read in-memory
+  objects (0.6 ms per ranking), but every 5 s the service checks for a newer active run and
+  reloads it. This removes the old limitation that new scores needed a restart:
+  `uv run python -m app.scoring.store --new` after editing the rules reaches a running server.
+- **Traceability**: every tool result carries `scoring_run`; `/health` shows it with the data date.
+- **Comparison**: `--diff OLD NEW` lists hubs and hazards whose days per year changed, which is
+  the core of the risk-change alert bonus.
+
+Why not query the tables on every tool call: rankings, ranks and breakdowns need all hubs; reading
+3,000 rows and rebuilding objects per call (~50 ms) buys nothing over a cache that is invalidated
+by run id. With Postgres and several app replicas (`docs/DATA_MODEL_SCALABLE.md`), each replica
+caches the same active run, so all replicas answer from the same scores.
+
+Why the scoring tables are not in the parquet snapshot: they are derived from the snapshot and the
+rules, so committing them would create a second source of truth; a fresh clone scores once on its
+first start (~1 s).

@@ -52,7 +52,8 @@ Work started around 13:30 UTC on 2026-11-15; about 4 hours used so far.
 | Agent | `app/agent/{schemas,tools,prompts,loop}.py` | `claude-sonnet-5-5`, effort low, refusal fallbacks; hand-written tool loop; tools `rank_hubs`, `explain_hub`, `compare_hubs` (slice 3, `DESIGN_DECISIONS.md` section 11); `ModelAnswer` = LLM output schema (no ranking), `AgentAnswer` = API response (server attaches the ranking from the engine); per-question cache for identical tool calls; tool schemas via `anthropic.transform_schema` (strict mode rejects min/max) |
 | UI | `app/static/index.html` | single page, no libraries, chat + details panel |
 | Raw cache | `app/sources/http_cache.py` | Redis when `REDIS_URL` is set (`import-files`, `status`), else `data/raw/` files (`DESIGN_DECISIONS.md` section 16) |
-| Tests | `tests/` | 58 offline tests (`uv run pytest -q`) |
+| Scores | `app/scoring/store.py` | SQLite scoring tables, one set per scoring run; memory caches the active run (`DESIGN_DECISIONS.md` section 17) |
+| Tests | `tests/` | 62 offline tests (`uv run pytest -q`) |
 | Evals | `evals/cases.yaml`, `evals/checks.py`, `evals/run.py` | 15 cases / 17 turns; `uv run python -m evals.run` (~$0.16-0.20 per run, laptop only) |
 
 Current top of the ranking: Boston 13.1, Minneapolis 11.7, Denver 10.3, Milwaukee 10.3, Chicago 9.6 (winter-driven). Virginia Beach (#6) is inflated by coastal wind, a documented limitation.

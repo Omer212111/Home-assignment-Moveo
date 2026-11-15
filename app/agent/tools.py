@@ -31,6 +31,11 @@ METHOD = {
 }
 
 
+def _method() -> dict:
+    """METHOD plus the scoring run the numbers come from (traceable to rules and data)."""
+    return {**METHOD, "scoring_run": service.run_id()}
+
+
 # What each hazard's number is built from, so the model can state the limits of the comparison.
 HAZARD_NOTES = {
     "tropical": "FEMA major-disaster declarations for the hub's county over 20 years (7 days per "
@@ -113,7 +118,7 @@ def explain_hub(args: ExplainHubInput) -> dict:
         "hazards_with_zero_days": [h for h in SINGLE_HAZARDS if r.hazards[h].days_per_year == 0],
         "weather_days_dropped_as_covered_by_fema_disasters": r.weather_days_deduplicated,
         "caveats": _caveats(r),
-        "method": METHOD,
+        "method": _method(),
     }
 
 
@@ -155,7 +160,7 @@ def compare_hubs(args: CompareHubsInput) -> dict:
             row["selected_hazards_days_per_year"] = round(sum(days(r, h) for h in hazards), 3)
     comparison["total"] = _leader({r.city: round(total[r.hub_id], 3) for r in hubs})
     return {**_period_info(months), "hubs": rows, "comparison": comparison, "hubs_ranked": len(ranks["total"]),
-            "method": METHOD}
+            "method": _method()}
 
 
 def rank_hubs(args: RankHubsInput) -> dict:
@@ -194,7 +199,7 @@ def rank_hubs(args: RankHubsInput) -> dict:
             "gap_first_to_last_days": round(abs(rows[0]["days_per_year"] - rows[-1]["days_per_year"]), 2) if rows else None,
         },
         "hubs_not_ranked_incomplete_data": out["excluded_incomplete_data"],
-        "method": METHOD,
+        "method": _method(),
     }
 
 
@@ -224,7 +229,7 @@ def hub_breakdown(args: HubBreakdownInput) -> dict:
                                  "weather variability, not a trend" if args.by == "year" else
                                  "each month or season rests on few events in 5 years (see events_in_data); "
                                  "hurricane months rest on very few FEMA disasters"),
-        "method": METHOD,
+        "method": _method(),
     }
     if len(hubs) > 1:  # per period: which hub is higher and by how much
         result["comparison_by_period"] = {

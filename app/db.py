@@ -27,11 +27,65 @@ CREATE TABLE IF NOT EXISTS disaster_declarations (
     title TEXT, declaration_date TEXT, incident_begin_date TEXT,
     PRIMARY KEY (disaster_number, county_fips)
 );
-CREATE TABLE IF NOT EXISTS hub_scores (
-    hub_id TEXT, hazard TEXT, score REAL, tier TEXT, breakdown_json TEXT,
-    scoring_version TEXT, data_as_of TEXT, computed_at TEXT,
-    PRIMARY KEY (hub_id, hazard, scoring_version, computed_at)
+DROP TABLE IF EXISTS hub_scores;  -- an early design, never written; replaced by the scoring tables below
+
+-- Scoring results (derived; not in the snapshot). Every score belongs to a scoring run, and a run
+-- records exactly which rules and which data produced it. Exactly one run is 'active' at a time.
+CREATE TABLE IF NOT EXISTS rule_sets (
+    rule_set_id INTEGER PRIMARY KEY AUTOINCREMENT,
+    sha256 TEXT UNIQUE NOT NULL,          -- hash of config/disruption.yaml
+    rules_yaml TEXT NOT NULL,             -- the rules exactly as used
+    first_used_at TEXT NOT NULL
 );
+CREATE TABLE IF NOT EXISTS scoring_runs (
+    run_id INTEGER PRIMARY KEY AUTOINCREMENT,
+    rule_set_id INTEGER NOT NULL REFERENCES rule_sets(rule_set_id),
+    data_fingerprint TEXT NOT NULL,       -- hash of the snapshot files the scores were computed from
+    data_as_of TEXT,                      -- last weather date in the data
+    status TEXT NOT NULL,                 -- running | active | superseded | failed
+    hubs INTEGER,
+    started_at TEXT NOT NULL,
+    finished_at TEXT
+);
+CREATE TABLE IF NOT EXISTS hub_results (
+    run_id INTEGER NOT NULL REFERENCES scoring_runs(run_id),
+    hub_id TEXT NOT NULL,
+    total_days_per_year REAL NOT NULL,    -- the KPI
+    weather_complete INTEGER NOT NULL,
+    weather_coverage REAL,
+    weather_period TEXT,
+    weather_years REAL,
+    declaration_years REAL,
+    weather_days_deduplicated INTEGER,
+    declarations_json TEXT,               -- FEMA disasters counted for this hub
+    PRIMARY KEY (run_id, hub_id)
+);
+CREATE TABLE IF NOT EXISTS hazard_scores (
+    run_id INTEGER NOT NULL,
+    hub_id TEXT NOT NULL,
+    hazard TEXT NOT NULL,
+    label TEXT,
+    days_per_year REAL NOT NULL,
+    from_weather REAL,
+    from_declarations REAL,
+    events_per_year REAL,
+    drivers_json TEXT,                    -- the rules behind the number, largest first
+    PRIMARY KEY (run_id, hub_id, hazard),
+    FOREIGN KEY (run_id, hub_id) REFERENCES hub_results(run_id, hub_id)
+);
+CREATE TABLE IF NOT EXISTS disruption_days (
+    run_id INTEGER NOT NULL,
+    hub_id TEXT NOT NULL,
+    date TEXT NOT NULL,                   -- a disruption day, or the start of a counted disaster
+    hazard TEXT NOT NULL,
+    value REAL NOT NULL,                  -- severity of the day, or days counted for the disaster
+    channel TEXT NOT NULL,                -- weather | declarations
+    label TEXT,                           -- the rule behind it
+    event TEXT NOT NULL,                  -- event or disaster id
+    PRIMARY KEY (run_id, hub_id, date, hazard, event),
+    FOREIGN KEY (run_id, hub_id) REFERENCES hub_results(run_id, hub_id)
+);
+CREATE INDEX IF NOT EXISTS idx_runs_status ON scoring_runs(status);
 CREATE TABLE IF NOT EXISTS conversations (
     session_id TEXT, turn INTEGER, role TEXT, content TEXT, created_at TEXT,
     PRIMARY KEY (session_id, turn)
