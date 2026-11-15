@@ -97,7 +97,8 @@
     <div id="examples">
       <button type="button">What are the 10 most dangerous hubs?</button>
       <button type="button">Which 3 Midwest hubs are most exposed to winter disruption?</button>
-      <button type="button">Which hubs are most at risk from hurricanes?</button>
+      <button type="button">Compare Miami and Houston in terms of hurricane and flood exposure.</button>
+      <button type="button">Why is the Dallas hub's weather disruption risk high?</button>
     </div>
     <form id="form">
       <textarea id="input" placeholder="Ask about hub weather risk..." rows="1" aria-label="Your question"></textarea>
@@ -168,6 +169,27 @@ function renderDetails(res) {
            + `<td class="barcell"><div class="bar" style="width:${(100 * r.days_per_year / max).toFixed(1)}%"></div></td>`
            + `<td>${esc(r.main_hazard)}</td></tr>`).join("")
          + "</tbody></table>";
+  }
+  // Hub profiles from explain_hub / compare_hubs: built from the engine's tool result, like the ranking.
+  const calls0 = (res.tool_calls || []).filter(c => !c.is_error && !c.cached);
+  for (const c of calls0) {
+    let hubs = null;
+    if (c.name === "compare_hubs") hubs = c.result.hubs;
+    if (c.name === "explain_hub") hubs = [{hub: c.result.hub, total_days_per_year: c.result.total_days_per_year,
+                                           overall_rank: c.result.context.overall_rank,
+                                           hazards: c.result.hazards_by_contribution}];
+    if (!hubs || !hubs.length) continue;
+    const hz = Object.keys(hubs[0].hazards);
+    const ranked = c.name === "compare_hubs" ? c.result.hubs_ranked : c.result.context.hubs_ranked;
+    html += `<h3>${c.name === "compare_hubs" ? "Comparison" : "Hub profile"} - days / year (rank of ${ranked})</h3>`
+         + "<table class='rank'><thead><tr><th>Hazard</th>"
+         + hubs.map(h => `<th class="num">${esc(h.hub.city)}</th>`).join("") + "</tr></thead><tbody>"
+         + hz.map(k => `<tr><td>${esc(hubs[0].hazards[k].label)}</td>` + hubs.map(h => {
+             const v = h.hazards[k];
+             return `<td class="num">${v.days_per_year.toFixed(2)} <span class="meta">#${v.rank_among_hubs ?? "-"}</span></td>`;
+           }).join("") + "</tr>").join("")
+         + "<tr><td><b>All hazards</b></td>" + hubs.map(h => `<td class="num"><b>${h.total_days_per_year.toFixed(2)}</b>`
+           + ` <span class="meta">#${h.overall_rank ?? "-"}</span></td>`).join("") + "</tr></tbody></table>";
   }
   const list = (title, items) => items && items.length
     ? `<h3>${title}</h3><ul>${items.map(x => `<li>${esc(x)}</li>`).join("")}</ul>` : "";

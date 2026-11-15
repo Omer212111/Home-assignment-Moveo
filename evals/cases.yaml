@@ -3,8 +3,8 @@
 # Checks applied to EVERY turn: answer matches the JSON schema, numbers are grounded in tool
 # results, "X of the Y" counts are correct, and any ranking equals the engine's ranking for the
 # arguments the model used. `expect` adds per-turn checks:
-#   tool:        rank_hubs | none      which tool must (or must not) be called
-#   args:        exact tool arguments that must be used
+#   tool:        rank_hubs | explain_hub | compare_hubs | none   which tool must (or must not) be called
+#   args:        exact arguments of that tool (lists compared as sets)
 #   ranking:     present | null
 #   confidence:  allowed confidence values
 #   mentions:    strings the answer must contain (case-insensitive)
@@ -44,3 +44,21 @@ cases:
         expect: {tool: rank_hubs, args: {hazard: tropical}, ranking: present}
       - question: Only the ones in the South, top 3.
         expect: {tool: rank_hubs, args: {hazard: tropical, region: South, top_n: 3}, ranking: present}
+
+  - id: compare_hurricane_flood
+    why: Assignment example question. Two hubs, two hazards in everyday words ("hurricane" ->
+      tropical); flood and hurricane days come from different data, which the answer should say.
+    turns:
+      - question: Compare Miami and Houston in terms of hurricane and flood exposure.
+        expect: {tool: compare_hubs, args: {hub_ids: [miami, houston], hazards: [tropical, flood]},
+                 ranking: null, mentions: [Miami, Houston]}
+
+  - id: explain_premise
+    why: Assignment example question with a premise the data only partly supports (Dallas is #17
+      of 50, above the median but not near the top). The agent should say where Dallas stands,
+      then explain; a follow-up switches to a comparison with a neighbouring hub.
+    turns:
+      - question: Why is the Dallas hub's weather disruption risk high?
+        expect: {tool: explain_hub, args: {hub_id: dallas}, ranking: null, mentions: ["17"]}
+      - question: How does it compare with Fort Worth?
+        expect: {tool: compare_hubs, args: {hub_ids: [dallas, fort_worth]}, ranking: null}

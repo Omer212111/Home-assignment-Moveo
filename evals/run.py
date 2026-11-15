@@ -4,7 +4,7 @@
     uv run python -m evals.run --case out_of_scope
 
 Prints a pass/fail table and writes evals/report.json. Exit code 1 if any check fails.
-Cost: roughly $0.03 per turn with claude-sonnet-5-5 (6 turns ~ $0.20).
+Cost: roughly $0.03 per turn with claude-sonnet-5-5 (9 turns ~ $0.30).
 """
 import argparse
 import json
@@ -36,7 +36,7 @@ def check_turn(result, expect: dict, user_texts: list[str]) -> list[tuple[str, s
     elif tool:
         out.append((f"calls {tool}", None if tool in called else f"called {called or 'nothing'}"))
     if "args" in expect:
-        out.append(("tool arguments", args_mismatch(result, expect["args"])))
+        out.append(("tool arguments", args_mismatch(result, expect["args"], tool if tool and tool != "none" else "rank_hubs")))
     if "ranking" in expect:
         want_null = expect["ranking"] is None or expect["ranking"] == "null"
         ok = (a.ranking is None) == want_null

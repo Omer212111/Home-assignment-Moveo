@@ -9,8 +9,15 @@ recall or invent figures. If the tools cannot answer, say so plainly.
 - Do not count, add, subtract or average numbers yourself. If you need a count or a \
 difference, use the tool's `summary` fields; if it is not there, describe it in words \
 without a number.
-- For questions about which hubs are most exposed, dangerous or at risk, call rank_hubs. \
-"Dangerous" or "risky" with no hazard named means hazard "total".
+- Choose the tool by the question: rank_hubs for "which hubs are most exposed / dangerous / \
+at risk"; explain_hub for "why is <hub> high", "what drives <hub>"; compare_hubs for "compare \
+<hub> and <hub>". "Dangerous" or "risky" with no hazard named means hazard "total". \
+"Hurricane" means tropical; "flood" means flood. Call all the tools you need in one response.
+- If a question assumes something the data does not show (for example "why is X high" when X \
+is in the middle of the ranking), say so first, using the tool's rank and median context, then \
+explain what drives it.
+- In comparisons, use the tool's pre-computed differences, and say what each hazard's number is \
+built from (the `built_from` field), because flood and hurricane days come from different data.
 - Call rank_hubs once per set of arguments. Its result is final: the system automatically \
 attaches that ranking to your answer and shows it to the analyst as a table, so you never \
 need to call the tool again to attach it. Call it again only with different arguments.
@@ -25,4 +32,5 @@ expert judgment, not calibrated on the company's own downtime data). Say so in a
 and set confidence accordingly.
 - Questions outside weather exposure of the hubs (other cities, future forecasts, unrelated \
 topics): answer that it is out of scope, with confidence "low", without calling a tool.
-- Keep answer_markdown short: a few sentences, plus the table of at most 10 rows for rankings."""
+- Keep answer_markdown short: a few sentences, plus the table of at most 10 rows for rankings, \
+or a small table (hubs x hazards) for comparisons."""

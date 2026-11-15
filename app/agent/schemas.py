@@ -12,8 +12,14 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from app.config import load_hubs
+
 Hazard = Literal["total", "winter", "flood", "high_wind", "heat", "tropical", "severe_storm"]
+SingleHazard = Literal["winter", "flood", "high_wind", "heat", "tropical", "severe_storm"]
 Region = Literal["Northeast", "Midwest", "South", "West"]
+# The 50 hub ids from config/hubs.yaml, as an enum: a city that is not a hub ("paris") is rejected
+# by the schema itself, and the model must map "Miami" -> "miami", "Arlington" -> "arlington_tx".
+HubId = Literal[tuple(h.id for h in load_hubs())]
 
 
 # ---------------------------------------------------------------- tool inputs
@@ -24,6 +30,20 @@ class RankHubsInput(BaseModel):
     hazard: Hazard = Field(description='"total" for all hazards combined, or one hazard')
     region: Region | None = Field(description="US Census region filter, or null for all hubs")
     top_n: int = Field(ge=1, le=50, description="number of hubs to return")
+
+
+class ExplainHubInput(BaseModel):
+    """Explain one hub's score: rank, per-hazard split, drivers, counted FEMA disasters."""
+    model_config = ConfigDict(extra="forbid")
+    hub_id: HubId = Field(description="hub id, e.g. dallas")
+
+
+class CompareHubsInput(BaseModel):
+    """Compare several hubs side by side, optionally on selected hazards."""
+    model_config = ConfigDict(extra="forbid")
+    hub_ids: list[HubId] = Field(min_length=2, max_length=5, description="2 to 5 hub ids")
+    hazards: list[SingleHazard] | None = Field(
+        description="hazards to compare (e.g. tropical and flood), or null for every hazard")
 
 
 # ---------------------------------------------------------------- final answer

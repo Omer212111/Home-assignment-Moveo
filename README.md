@@ -1,0 +1,17 @@
+# Weather Risk Intelligence Agent
+
+Ranks a logistics company's 50 US distribution hubs by expected weather disruption days per year,
+with a Claude agent that answers questions about the ranking. (Full README coming; see `docs/`.)
+
+## Quick start
+
+```
+uv sync
+uv run uvicorn app.main:app --reload
+```
+
+Open http://127.0.0.1:8000/ for the chat, http://127.0.0.1:8000/docs for the API.
+The chat needs `ANTHROPIC_API_KEY` in a `.env` file in the repository root.
+
+- Tests (offline): `uv run pytest -q`
+- Agent evals (real API calls): `uv run python -m evals.run`

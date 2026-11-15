@@ -94,10 +94,17 @@ def ranking_mismatch(result: AgentResult) -> str | None:
     return None
 
 
-def args_mismatch(result: AgentResult, expected_args: dict) -> str | None:
-    calls = [c for c in result.tool_calls if c.name == "rank_hubs"]
+def _same(actual, expected) -> bool:
+    # Lists of hubs or hazards are sets: ["houston", "miami"] equals ["miami", "houston"].
+    if isinstance(expected, list) and isinstance(actual, list):
+        return sorted(actual) == sorted(expected)
+    return actual == expected
+
+
+def args_mismatch(result: AgentResult, expected_args: dict, tool: str = "rank_hubs") -> str | None:
+    calls = [c for c in result.tool_calls if c.name == tool]
     if not calls:
-        return "rank_hubs was not called"
+        return f"{tool} was not called"
     actual = calls[-1].input
-    diff = {k: (actual.get(k), v) for k, v in expected_args.items() if actual.get(k) != v}
+    diff = {k: (actual.get(k), v) for k, v in expected_args.items() if not _same(actual.get(k), v)}
     return f"args (got, expected): {json.dumps(diff)}" if diff else None

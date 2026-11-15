@@ -164,7 +164,7 @@ The `session_id` lives in page memory; the history lives on the server (SQLite).
 The answer is structured JSON that only means something when complete; streaming it would add partial-JSON handling on both sides. Chosen: no streaming; a "Thinking..." indicator and a disabled Send button (no double submits) for the 3-10 s wait. Server errors are shown with the server's own message (e.g. "Anthropic API rate limit (429)..."), and an unreachable server separately.
 
 **Decision 6: guiding the user.**
-Three clickable example questions show what the agent can do in this slice (only `rank_hubs` exists), so scope is communicated up front.
+Clickable example questions show what the agent can do (ranking, comparison, explanation), so scope is communicated up front.
 
 **Decision 7: phones, dark mode, accessibility.**
 Two columns on desktop, stacked under 860 px; ranking bars hidden on phones. A bug found in testing: the page was 492 px wide on a 390 px phone because a grid column defined as `1fr` grows to its widest content; fixed with `minmax(0, 1fr)`, and wide chat tables scroll inside their bubble. Dark mode follows the OS setting via CSS variables. Labels on inputs, `aria-live` on messages, Enter to send, Shift+Enter for a new line.
@@ -173,3 +173,42 @@ Two columns on desktop, stacked under 860 px; ranking bars hidden on phones. A b
 Headless Chromium with `/chat` intercepted: a canned answer built from a real answer, then an injected 502/429 error. Checked at desktop and iPhone 13 sizes, including page width against screen width (which found the bug in decision 7). An API test checks that `/` serves the page and that it calls `/chat`.
 
 **Known limitations:** no streaming; a conversation does not survive a reload; a Markdown subset only; voice not implemented yet.
+
+---
+
+## 11. Slice 3: `explain_hub` and `compare_hubs` (`app/agent/tools.py`)
+
+For the example questions "Compare Miami and Houston in terms of hurricane and flood exposure" and
+"Why is the Dallas hub's weather disruption risk high?".
+
+**Decision 1: two tools, or one general "hub details" tool?**
+Two tools with clear names that match the two intents. The model picks a tool by its name and
+description, so "compare" -> `compare_hubs` and "why" -> `explain_hub` leave little room for
+error. Both share one builder (`_hazard_detail`), so the numbers cannot differ between them.
+
+**Decision 2: how does the model name a hub?**
+`hub_id` is an enum of the 50 ids, generated from `config/hubs.yaml`. A non-hub ("paris") is
+rejected by the schema, and the model must resolve "Arlington" to `arlington_tx` itself.
+
+**Decision 3: the "why is Dallas high" premise.**
+Dallas is #17 of 50 (6.08 days/yr vs a median of 4.85): above the median, not near the top.
+Answering "why it is high" without saying so would be misleading for an investment decision.
+`explain_hub` therefore returns pre-computed context (overall rank, position, median, difference
+from the median), and the prompt asks the model to correct a premise the data does not support,
+then explain the drivers. The eval checks that the answer mentions the rank (17).
+
+**Decision 4: no arithmetic in the model (same principle as `rank_hubs`).**
+`compare_hubs` returns, per hazard, the highest and lowest hub and the difference, plus the
+combined total of the selected hazards. `explain_hub` returns each hazard's share of the total.
+
+**Decision 5: say what each number is built from.**
+Hurricane days come from 20 years of FEMA declarations; flood days come from 5 years of rainfall;
+flooding during a declared hurricane counts under hurricanes. Each hazard carries a `built_from`
+note, so a comparison of "hurricane and flood" states that the two use different data.
+Example: Miami has more hurricane days (1.40 vs 1.05) and flood days (2.60 vs 2.50), yet
+Houston's total is higher (4.67 vs 4.20) because of winter and severe-storm days.
+
+**Decision 6: the UI.**
+The details panel builds a hubs x hazards table (days and rank) from the tool result, like the
+ranking table, never by parsing the model's text. `AgentAnswer` is unchanged: the comparison is
+in `tool_calls`, which the API already returns.
