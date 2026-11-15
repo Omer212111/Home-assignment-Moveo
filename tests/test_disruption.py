@@ -78,7 +78,7 @@ def test_recovery_tail_is_cut_by_next_event():
 
 def test_partial_severity_days():
     # light snow (0.3) and extreme heat (0.15)
-    df = set_day(set_day(calm_year(), 5, snowfall_sum=3.0), 200, tmax=40.0)
+    df = set_day(set_day(calm_year(), 5, snowfall_sum=3.0), 200, tmax=44.0)
     r = run(df)
     assert r.hazards["winter"].from_weather == pytest.approx(0.3 * 365.25 / 365, abs=0.01)
     assert r.hazards["heat"].from_weather == pytest.approx(0.15 * 365.25 / 365, abs=0.01)
@@ -100,7 +100,7 @@ def test_declarations_annualised_dr_only():
                          decl_row(3, "Tornado", "DR", "2015-05-01"),
                          decl_row(4, "Snowstorm", "DR", "2016-02-01")])    # winter: weather channel only
     r = run(calm_year(), decl)
-    assert r.hazards["tropical"].from_declarations == pytest.approx(5.0 / 20)
+    assert r.hazards["tropical"].from_declarations == pytest.approx(7.0 / 20)
     assert r.hazards["severe_storm"].from_declarations == pytest.approx(1.5 / 20)
     assert r.hazards["winter"].from_declarations == 0
     assert {c.disaster_number for c in r.declarations_counted} == {1, 3}
@@ -113,7 +113,7 @@ def test_weather_days_inside_declaration_window_are_not_double_counted():
     r = run(df, pd.DataFrame([decl_row(1, "Hurricane", "DR", hurricane_day)]))
     assert r.hazards["flood"].from_weather == 0
     assert r.weather_days_deduplicated == 3          # 1 trigger day + 2 recovery days
-    assert r.hazards["tropical"].from_declarations == pytest.approx(0.25)
+    assert r.hazards["tropical"].from_declarations == pytest.approx(0.35)
 
 
 def test_incomplete_weather_is_flagged_and_not_ranked():

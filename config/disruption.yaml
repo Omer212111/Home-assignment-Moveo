@@ -25,25 +25,38 @@ hazards:
   tropical: Hurricanes and tropical storms
   severe_storm: Severe storms and tornadoes
 
-# Weather rules. op: ">=" or "<=" against a daily value, or "in" against a list (weather codes).
+# Weather rules. A rule fires when ALL its conditions hold (single-condition rules are written inline).
+#
+# CALIBRATION v2 (after looking at the real 2021-2025 data, see docs/DATA_NOTES.md):
+#  - Heat >= 43 C (was 38): at 38 C Phoenix had 101 trigger days/yr and ranked #2 overall,
+#    although its operations are built for that heat. Thresholds for temperature are set
+#    where even adapted operations are disrupted; the same logic moved extreme cold to -25 C.
+#  - Snow thresholds lowered (7 / 17 cm, was 10 / 25): Open-Meteo snowfall looks ~30% low
+#    (gridded reanalysis + snow-to-water ratio; not yet confirmed in its documentation).
+#  - Ice: the dataset never contains freezing-rain weather codes, so ice is detected as
+#    "rain >= 1 mm on a day whose max stays <= 1 C". This catches the Jan-Feb 2023 Dallas ice
+#    storm and Winter Storm Uri (Feb 2021).
+#  - KNOWN LIMITATION, wind: grid cells are ~25 km wide, so for coastal hubs (Virginia Beach,
+#    Oakland, Boston) the cell partly covers open water, where gusts are stronger than on land.
+#    Their high-wind days are likely overstated. Documented, not corrected (see docs/IMPROVEMENTS.md).
 weather_rules:
-  - {hazard: winter,    variable: snowfall_sum,   op: ">=", threshold: 25,   severity: 1.0,  recovery_days: 2, label: "Snow >= 25 cm: hub closed"}
-  - {hazard: winter,    variable: snowfall_sum,   op: ">=", threshold: 10,   severity: 1.0,  recovery_days: 1, label: "Snow >= 10 cm: hub closed"}
-  - {hazard: winter,    variable: snowfall_sum,   op: ">=", threshold: 1,    severity: 0.3,  recovery_days: 0, label: "Snow 1-10 cm: slowed"}
-  - {hazard: winter,    variable: weather_code,   op: "in", threshold: [56, 57, 66, 67], severity: 1.0, recovery_days: 1, label: "Freezing rain / drizzle: ice"}
-  - {hazard: winter,    variable: tmin,           op: "<=", threshold: -18,  severity: 0.25, recovery_days: 0, label: "Min temp <= -18 C: extreme cold"}
+  - {hazard: winter,    variable: snowfall_sum,   op: ">=", threshold: 17,   severity: 1.0,  recovery_days: 2, label: "Snow >= 17 cm (~25 cm real): hub closed"}
+  - {hazard: winter,    variable: snowfall_sum,   op: ">=", threshold: 7,    severity: 1.0,  recovery_days: 1, label: "Snow >= 7 cm (~10 cm real): hub closed"}
+  - {hazard: winter,    conditions: [{variable: rain_sum, op: ">=", threshold: 1}, {variable: tmax, op: "<=", threshold: 1}], severity: 1.0, recovery_days: 1, label: "Rain at <= 1 C: ice"}
+  - {hazard: winter,    variable: snowfall_sum,   op: ">=", threshold: 2,    severity: 0.3,  recovery_days: 0, label: "Snow 2-7 cm: slowed"}
+  - {hazard: winter,    variable: tmin,           op: "<=", threshold: -25,  severity: 0.25, recovery_days: 0, label: "Min temp <= -25 C: extreme cold"}
   - {hazard: flood,     variable: precip_sum,     op: ">=", threshold: 100,  severity: 1.0,  recovery_days: 2, label: "Rain >= 100 mm: flooding"}
   - {hazard: flood,     variable: precip_sum,     op: ">=", threshold: 50,   severity: 0.5,  recovery_days: 0, label: "Rain >= 50 mm: local flooding"}
   - {hazard: high_wind, variable: wind_gusts_max, op: ">=", threshold: 90,   severity: 1.0,  recovery_days: 0, label: "Gusts >= 90 km/h: operations stopped"}
   - {hazard: high_wind, variable: wind_gusts_max, op: ">=", threshold: 75,   severity: 0.5,  recovery_days: 0, label: "Gusts >= 75 km/h: dock/trailer work limited"}
-  - {hazard: heat,      variable: tmax,           op: ">=", threshold: 38,   severity: 0.15, recovery_days: 0, label: "Max temp >= 38 C: shortened shifts"}
+  - {hazard: heat,      variable: tmax,           op: ">=", threshold: 43,   severity: 0.15, recovery_days: 0, label: "Max temp >= 43 C: shortened shifts"}
 
 # Declaration rules: only these incident types are counted in this channel. Winter and
 # flood declarations are NOT counted here, because the weather channel already measures them.
 declaration_types_counted: [DR]   # EM declarations are mostly evacuee support (e.g. Dallas for Harvey)
 declaration_window_years: 20
 declaration_rules:
-  - {hazard: tropical,     incident_types: [Hurricane, Tropical Storm, Typhoon, Coastal Storm], days_per_event: 5.0, label: "Hurricane / tropical storm: pre-landfall shutdown + power restoration"}
+  - {hazard: tropical,     incident_types: [Hurricane, Tropical Storm, Typhoon, Coastal Storm], days_per_event: 7.0, label: "Hurricane / tropical storm: pre-landfall shutdown + power restoration"}
   - {hazard: severe_storm, incident_types: [Severe Storm, Tornado], days_per_event: 1.5, label: "Severe storm / tornado: damage and outages"}
 
 # Weather days within this many days of a counted declaration's incident start are
