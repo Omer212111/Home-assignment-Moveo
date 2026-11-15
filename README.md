@@ -278,7 +278,7 @@ Two layers:
 
 | Layer | Checks | Command | Cost |
 |---|---|---|---|
-| Unit tests (`tests/`, 70 tests) | Scoring rules, time breakdowns, stored scoring runs, ingestion, API, agent loop with a scripted fake Claude, the eval checks themselves, Redis cache | `uv run pytest -q` | free, offline |
+| Unit tests (`tests/`, 71 tests) | Scoring rules, time breakdowns, stored scoring runs, ingestion, API, agent loop with a scripted fake Claude, the eval checks themselves, Redis cache | `uv run pytest -q` | free, offline |
 | Agent evals (`evals/`, 15 cases / 17 turns) | The real model on edge cases: the 4 assignment questions, a city that is not a hub, "top 100" when only 50 exist, follow-ups, "winter" hazard vs season, safest hubs, worst month, per-year comparison, hurricane season | `uv run python -m evals.run` | ~$0.55 |
 
 Checks on every turn: valid answer format, the right tool with the right arguments, ranking equal
@@ -319,7 +319,9 @@ uv run python -m app.ingest --status
 uv run python -m app.ingest
 ```
 
-Options: `--source weather|declarations`, `--hubs denver,miami`, `--refresh` (ignore the cache).
+Options: `--source weather|declarations`, `--hubs denver,miami`, `--refresh` (ignore the cache),
+`--no-score`. **Ingestion ends by creating a new scoring run** if the data changed (never after a
+failed ingestion) and prints which hub scores moved; a running server serves it within 5 seconds.
 The weather download needs a machine with Open-Meteo quota (the free tier is limited).
 
 **Raw API cache.** Every API response is cached, so re-running ingestion makes no API calls:
@@ -436,7 +438,7 @@ Every answer from the agent carries `assumptions`, `confidence` and `uncertainty
 ## 12. Status and next steps
 
 Built: data ingestion, scoring engine, time breakdowns, 5-tool agent with guardrails, API, chat
-page with agent-step view, trajectories, Redis cache, scores stored per scoring run, standardised index and tiers (also per month), 70 tests, 15-case eval set (run 7: 110/111).
+page with agent-step view, trajectories, Redis cache, scores stored per scoring run, standardised index and tiers (also per month), scoring triggered by ingestion, 71 tests, 15-case eval set (run 7: 110/111).
 
 Next (in order): refresh `docs/ARCHITECTURE.md`; deploy (Docker on Render); bonus: voice input
 (browser Web Speech API) and an alert when a hub's score changes. Longer-term improvements (cost in

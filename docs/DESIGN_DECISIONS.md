@@ -446,3 +446,25 @@ later be priced).
 - **Shown in**: every tool result, `/rankings`, `/hubs/{id}`, the ranking table (Index, Tier columns)
   and the hub profile / comparison tables. The prompt asks the model to lead with days and may add
   index and tier ("6.08 days/yr, index 125, elevated").
+
+---
+
+## 19. When results are computed: on write, not on startup or per request
+
+Three kinds of work, three moments (measured on the current data):
+
+| Work | Cost | When | Why |
+|---|---|---|---|
+| Scoring: rules applied to the data -> disruption days, hazard / hub / monthly scores | 1.1 s for 50 hubs (minutes at 10,000) | **when the inputs change** (write path), stored as a scoring run | depends only on data + rules; per-request recompute repeats identical work; one stored run = every user and replica sees the same numbers; alerts compare stored runs |
+| Views: rankings by season, comparisons, breakdowns | 0.6-6 ms from stored results | **on demand** | too many combinations to precompute; each is a sum of at most 12 monthly rows |
+| Raw weather facts (`weather_stat`) | a few ms per hub | **on demand** | free-form conditions cannot be precomputed |
+
+**Implemented:** ingestion now ends by creating a scoring run (`app/ingest.py::score_after_ingest`):
+- a new run only if the data or rules actually changed (the snapshot fingerprint excludes the download log);
+- **never after a failed ingestion**: incomplete data must not become the active scores; the previous run stays;
+- it prints what moved compared with the previous active run (the comparison alerts will use);
+- `--no-score` skips it. The server picks up the new run within 5 s (section 17), without a restart.
+
+The startup check (score if the active run does not match the rules and data) stays as a safety
+net, e.g. for a fresh clone or after editing the rules. Per-hub lazy scoring on demand would be
+the right choice only with thousands of hubs that are rarely asked about.

@@ -115,6 +115,7 @@ def main(argv=None):
     p.add_argument("--refresh", action="store_true", help="ignore the raw cache and call the APIs again")
     p.add_argument("--no-snapshot", action="store_true", help="do not export the parquet snapshot")
     p.add_argument("--status", action="store_true", help="only show what is in the database, download nothing")
+    p.add_argument("--no-score", action="store_true", help="do not create a new scoring run after ingesting")
     args = p.parse_args(argv)
 
     if args.status:
@@ -143,9 +144,37 @@ def main(argv=None):
     print_status()
     if not args.no_snapshot:
         print("snapshot:", db.export_snapshot())
+    score_after_ingest(failures, snapshot_written=not args.no_snapshot and not args.no_score)
     if failures:
         print(f"WARNING: {len(failures)} failures: {failures}")
         raise SystemExit(1)
+
+
+def score_after_ingest(failures: list, snapshot_written: bool) -> int | None:
+    """The write path: new data -> a new scoring run (the API only serves the active run).
+
+    A new run is created only if the data (or the rules) actually changed, and never from a run
+    with failures: incomplete data must not become the active scores. Prints what moved compared
+    with the previous active run (the same comparison risk-change alerts will use)."""
+    from app.scoring import store
+    if failures:
+        print("scoring: skipped (ingestion had failures; the current scores stay active)")
+        return None
+    if not snapshot_written:
+        print("scoring: skipped (no snapshot written; run `python -m app.scoring.store --new` to score)")
+        return None
+    previous = store.active_run_id()
+    run = store.ensure_current()
+    if run == previous:
+        print(f"scoring: data and rules unchanged, run {run} stays active")
+        return run
+    print(f"scoring: new active run {run}" + (f" (previous {previous})" if previous else ""))
+    if previous:
+        changes = store.diff_runs(previous, run)
+        print(f"  {len(changes)} hub/hazard scores moved by 0.1 days/yr or more")
+        for c in changes[:5]:
+            print(f"  {c['hub_id']:<16} {c['hazard']:<13} {c['old']:>6.2f} -> {c['new']:>6.2f} ({c['change']:+.2f})")
+    return run
 
 
 if __name__ == "__main__":

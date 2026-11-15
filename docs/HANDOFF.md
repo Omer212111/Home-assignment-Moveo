@@ -54,7 +54,8 @@ Work started around 13:30 UTC on 2026-11-15; about 4 hours used so far.
 | Raw cache | `app/sources/http_cache.py` | Redis when `REDIS_URL` is set (`import-files`, `status`), else `data/raw/` files (`DESIGN_DECISIONS.md` section 16) |
 | Scores | `app/scoring/store.py` | SQLite scoring tables, one set per scoring run; memory caches the active run (`DESIGN_DECISIONS.md` section 17) |
 | Index | `config/disruption.yaml` `index` | 100 = median hub (4.85 days, fixed); tiers low..very high; per month/season pro-rated, `monthly_scores` table (`DESIGN_DECISIONS.md` section 18) |
-| Tests | `tests/` | 70 offline tests (`uv run pytest -q`) |
+| Write path | `app/ingest.py::score_after_ingest` | ingestion creates the scoring run (`DESIGN_DECISIONS.md` section 19) |
+| Tests | `tests/` | 71 offline tests (`uv run pytest -q`) |
 | Evals | `evals/cases.yaml`, `evals/checks.py`, `evals/run.py` | 15 cases / 17 turns; `uv run python -m evals.run` (~$0.16-0.20 per run, laptop only) |
 
 Current top of the ranking: Boston 13.1, Minneapolis 11.7, Denver 10.3, Milwaukee 10.3, Chicago 9.6 (winter-driven). Virginia Beach (#6) is inflated by coastal wind, a documented limitation.

@@ -64,3 +64,22 @@ def test_weather_ingest_stores_rows_and_stops_on_rate_limit(monkeypatch, tmp_db)
     assert calls == [hubs[0].id, hubs[1].id]   # stopped after the rate limit, did not burn more quota
     assert failures == [hubs[1].id]
     assert rows == 3 and errors == 1
+
+
+def test_ingestion_triggers_a_scoring_run_only_when_it_should(tmp_db, monkeypatch, capsys):
+    """The write path: a successful ingest scores; failures or no snapshot never replace the scores."""
+    from app.scoring import store
+    db.restore_snapshot()
+    assert ingest.score_after_ingest(["denver: rate limited"], snapshot_written=True) is None
+    assert store.active_run_id() is None                      # incomplete data never becomes the scores
+    assert ingest.score_after_ingest([], snapshot_written=False) is None
+
+    first = ingest.score_after_ingest([], snapshot_written=True)
+    assert first is not None and store.active_run_id() == first
+    assert ingest.score_after_ingest([], snapshot_written=True) == first   # same data: no new run
+    assert "unchanged" in capsys.readouterr().out
+
+    monkeypatch.setattr(store, "data_fingerprint", lambda: "new-data")    # ingestion changed the data
+    second = ingest.score_after_ingest([], snapshot_written=True)
+    assert second != first and store.active_run_id() == second
+    assert f"new active run {second} (previous {first})" in capsys.readouterr().out
