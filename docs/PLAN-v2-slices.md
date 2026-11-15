@@ -6,7 +6,7 @@ This is a take-home assignment for an FDE role, with a 24h deadline and about 12
 What you decided:
 - **Build in thin end-to-end slices.** Each slice gets a simple demo, and the base grows only after a slice works end to end. Slice 1 is **"list the most dangerous hubs"**.
 - **Hubs = the 40 most populous US cities.**
-- LLM: Claude `claude-opus-5-5`. Deploy target: Render.
+- LLM: Claude `claude-opus-5-5` (later changed to `claude-sonnet-5-5` to lower cost). Deploy target: Render.
 - Focus now: **data** (which parameters to keep, how often to update them, whether to cache).
 
 ## Hubs (`config/hubs.yaml`): 50 most populous US cities (UPDATED)

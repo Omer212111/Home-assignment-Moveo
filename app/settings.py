@@ -10,7 +10,7 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=ROOT / ".env", extra="ignore")
 
     # LLM
-    llm_model: str = "claude-opus-5-5"
+    llm_model: str = "claude-sonnet-5-5"  # cheaper than Opus 5.5; reliable tool use + JSON schema
     llm_effort: str = "low"  # chat latency matters more than deep reasoning here; tools do the maths
 
     # Storage
