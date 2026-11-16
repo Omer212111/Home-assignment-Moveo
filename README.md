@@ -287,7 +287,11 @@ uv run python -m app.scoring.report --hazard winter --region Midwest
 
 ## 4. The agent
 
-A hand-written tool-use loop (`app/agent/loop.py`, no framework) around Claude Sonnet 5.5.
+A hand-written tool-use loop (`app/agent/loop.py`) around Claude Sonnet 5.5.
+
+**Why no agent framework (my choice):** the loop is simple: call the model, run the tools it asks
+for, send the results back, repeat. A framework would have added dependency problems and setup
+time without a real benefit, and writing it by hand keeps every step visible and logged.
 
 **Five tools** (`app/agent/tools.py`), each named after a type of question:
 
