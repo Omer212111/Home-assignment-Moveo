@@ -1,7 +1,6 @@
 # Weather Risk Intelligence Agent
 
-A logistics company runs 50 regional distribution hubs across the US (one in each of the 50 most
-populous cities) and each year picks a few hubs for resilience investment. This project ranks the
+A logistics company runs regional distribution hubs across the US. and each year picks a few hubs for resilience investment. This project ranks the
 hubs by **expected weather disruption days per year**, computed by a deterministic rules engine
 from public weather and disaster data, and puts a **Claude agent** on top so analysts can ask
 questions in plain language and follow up.
