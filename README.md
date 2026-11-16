@@ -31,10 +31,8 @@ flowchart LR
         direction TB
         APIS["<b>Public APIs</b><br/>Open-Meteo · OpenFEMA"]
         ING["<b>app/ingest.py</b><br/>fetch · validate<br/>→ new scoring run"]
-        RAW[("<b>raw cache</b><br/>local files or Redis<br/>not in git")]
         SNAP[("<b>parquet snapshot</b><br/>committed to git")]
         APIS --> ING
-        ING <--> RAW
         ING --> SNAP
     end
 
@@ -79,13 +77,12 @@ flowchart LR
     class AGENT,TOOLS,ALERT agent
     class CLAUDE,HOOK,APIS ext
     class ENG,DB eng
-    class ING,RAW,SNAP,GIT batch
+    class ING,SNAP,GIT batch
     class OFF,SVC group
 ```
 
 1. **Offline ingestion** (on a laptop, on demand: monthly or quarterly is enough) downloads from the
-   public APIs, validates, writes the parquet snapshot and creates a scoring run. The raw API
-   responses stay in a local cache (or Redis) so a re-run spends no quota.
+   public APIs, validates, writes the parquet snapshot and creates a scoring run.
 2. **The snapshot is committed**; a push to `main` runs the tests in CI and Render redeploys.
 3. **The service never calls a weather API**: at startup it restores the snapshot into SQLite and
    scores it once; chat, tools, `/rankings` and alerts read the active scoring run.
@@ -184,7 +181,6 @@ See [section 1a](#1a-deploy-to-a-url-render).
 | `LLM_MODEL` | `claude-sonnet-5-5` | Model used by the agent |
 | `LLM_EFFORT` | `low` | Thinking effort; the tools do the computing |
 | `LLM_THINKING_DISPLAY` | `summarized` | `summarized` returns a readable thinking summary (for the "Agent steps" view); `omitted` returns none |
-| `REDIS_URL` | (none) | Optional: keep the raw API cache in Redis instead of files (section 7) |
 | `ALERT_WEBHOOK_URL` | (none) | Optional: where alerts are POSTed (Slack-compatible JSON); without it they are stored and shown in the page |
 | `ALERTS_TOKEN` | (none) | Optional: token required by `POST /alerts/check` |
 | `APP_PASSWORD` | (none) | Optional: password for the whole site (HTTP Basic auth, any user name), except `/health`. Set it on a public URL |
@@ -392,7 +388,7 @@ Two layers:
 
 | Layer | Checks | Command | Cost |
 |---|---|---|---|
-| Unit tests (`tests/`, 89 tests; run on every push by GitHub Actions) | Scoring rules, time breakdowns, stored scoring runs, ingestion, API, agent loop with a scripted fake Claude, the eval checks themselves, Redis cache | `uv run pytest -q` | free, offline |
+| Unit tests (`tests/`, 89 tests; run on every push by GitHub Actions) | Scoring rules, time breakdowns, stored scoring runs, ingestion, API, agent loop with a scripted fake Claude, the eval checks themselves | `uv run pytest -q` | free, offline |
 | Agent evals (`evals/`, 24 cases / 29 turns) | The real model on edge cases: the 4 assignment questions, a city that is not a hub, "top 100" when only 50 exist, follow-ups, "winter" hazard vs season, safest hubs, worst month, per-year comparison, hurricane season | `uv run python -m evals.run` | ~$0.80 |
 
 Checks on every turn: valid answer format, the right tool with the right arguments, ranking equal
@@ -437,7 +433,7 @@ Results so far (details and what changed after each run in `docs/EVALS.md`):
 **When to run ingestion:** the first build of the dataset; a data refresh (a new year of weather,
 new FEMA declarations: monthly or quarterly is plenty, the KPI is a 5-year average); a hub added to
 `config/hubs.yaml` (`--hubs new_id`); a longer history or a new variable; a change in the cleaning
-logic (re-run from the local cache, no API calls). **Never** at server startup, per question, or on Render.
+logic. **Never** at server startup, per question, or on Render.
 
 **Why it is separate from the app:** the APIs are slow, rate-limited and sometimes unreachable (the
 Open-Meteo free quota ran out during this project); historical data barely changes; questions are
@@ -454,26 +450,10 @@ uv run python -m app.ingest --status
 uv run python -m app.ingest
 ```
 
-Options: `--source weather|declarations`, `--hubs denver,miami`, `--refresh` (ignore the cache),
+Options: `--source weather|declarations`, `--hubs denver,miami`,
 `--no-score`. **Ingestion ends by creating a new scoring run** if the data changed (never after a
 failed ingestion) and prints which hub scores moved; a running server serves it within 5 seconds.
 The weather download needs a machine with Open-Meteo quota (the free tier is limited).
-
-**Raw API cache.** Every API response is cached, so re-running ingestion makes no API calls:
-local files in `data/raw/` by default (git-ignored: the app never needs them, only ingestion
-does, so a fresh clone runs without them), or **Redis** when `REDIS_URL` is set. To use Redis (Docker):
-
-```
-docker run -d --name redis -p 6379:6379 -v redis-data:/data redis:7 redis-server --appendonly yes
-```
-
-Add `REDIS_URL=redis://localhost:6379/0` to `.env`, then copy a local file cache (if you have one) into Redis
-once and check:
-
-```
-uv run python -m app.sources.http_cache import-files
-uv run python -m app.sources.http_cache status
-```
 
 ---
 
@@ -498,7 +478,6 @@ More diagrams: `docs/ARCHITECTURE.md`, `docs/DATA_MODEL.md`. PNG/SVG export of t
 
 | Layer | Technology | Contents | Why |
 |---|---|---|---|
-| Raw API cache | **Redis** (`REDIS_URL`) or local JSON files in `data/raw/` (not in git) | Original API responses, never expire | Protects the Open-Meteo quota; audit trail ("where did this number come from?"); Redis shares one cache across machines, files work with no server |
 | Snapshot | Parquet in `data/snapshot/` (828 KB, in git) | Cleaned tables: hubs, daily weather, declarations, ingest log | Reproducible: any clone has exactly the data behind the numbers |
 | Database | **SQLite** (`data/weather_risk.db`, rebuilt at startup) | The same tables + chat conversations | Small relational data, SQL for checks, no server to run; one container needs no more |
 | Scores | **SQLite scoring tables**, one set per scoring run (`rule_sets`, `scoring_runs`, `hub_results`, `hazard_scores`, `disruption_days`); the active run cached in memory | KPI per hub and hazard, drivers, every disruption day | Every score traceable to the exact rules and data; runs can be compared (risk-change alerts); a new run reaches the running server without a restart |
@@ -508,7 +487,7 @@ All tables and how they connect: `docs/DATA_MODEL.md` (entity-relationship diagr
 
 Scale-out path: the target data model in `docs/DATA_MODEL_SCALABLE.md` (Postgres with partitioned
 weather per location, versioned rule sets and scoring runs, persisted disruption days and monthly
-scores, raw responses in object storage, Redis as the read cache).
+scores, Redis as the read cache).
 
 ---
 
@@ -522,7 +501,7 @@ app/
   db.py                 SQLite schema, snapshot restore/export
   ingest.py             offline ingestion CLI (ends with a scoring run)
   alerts.py             monthly outlook and score-change alerts, webhook delivery
-  sources/              open_meteo.py, fema_declarations.py, http_cache.py (Redis / files)
+  sources/              open_meteo.py, fema_declarations.py
   scoring/
     disruption.py       the rules engine: disruption days per hub and hazard, ranking
     periods.py          month / season / year breakdowns
@@ -542,7 +521,6 @@ config/
   alerts.yaml           alert policy (thresholds, lead time)
 data/
   snapshot/             parquet snapshot (in git)
-  raw/                  raw API responses (local cache for ingestion, git-ignored)
 evals/                  cases.yaml, checks.py, run.py, report.json, trajectories/
 tests/                  offline tests
 docs/                   design documents (section 13)
@@ -576,7 +554,7 @@ Every answer from the agent carries `assumptions`, `confidence` and `uncertainty
 ## 12. Status and next steps
 
 Built: data ingestion, scoring engine, time breakdowns, 5-tool agent with guardrails, API, chat
-page with agent-step view, trajectories, Redis cache, scores stored per scoring run, standardised index and tiers (also per month), scoring triggered by ingestion, alerts (monthly outlook + score change) safe under concurrency, Docker image and Render blueprint, 89 tests with CI, 24-case eval set, 15-case eval set (run 7: 110/111).
+page with agent-step view, trajectories, scores stored per scoring run, standardised index and tiers (also per month), scoring triggered by ingestion, alerts (monthly outlook + score change) safe under concurrency, Docker image and Render blueprint, 89 tests with CI, 24-case eval set, 15-case eval set (run 7: 110/111).
 
 Next (in order): refresh `docs/ARCHITECTURE.md`; bonus: voice input
 (browser Web Speech API); live NWS alerts for storms in the coming days. Longer-term improvements (cost in
@@ -589,9 +567,9 @@ dollars, tail risk, FEMA National Risk Index, uncertainty ranges) are in `docs/I
 | Document | Contents |
 |---|---|
 | `docs/ARCHITECTURE.md` | Component diagram, chat sequence, component table |
-| `docs/DATA_MODEL.md` | Entity-relationship diagram of every table (Redis cache, SQLite, in-memory) |
+| `docs/DATA_MODEL.md` | Diagram of every table (source tables, scoring runs, alerts) and how they connect |
 | `docs/DATA_MODEL_SCALABLE.md` | Target data model for scale: Postgres, versioned rules and scoring runs, incremental pipeline, migration path |
-| `docs/DESIGN_DECISIONS.md` | Every design decision with the options considered and why (API, agent, UI, tools, guardrails, caching, Redis) |
+| `docs/DESIGN_DECISIONS.md` | Every design decision with the options considered and why (API, agent, UI, tools, guardrails, caching, scoring runs, alerts, concurrency) |
 | `docs/QUESTION_CATALOG.md` | The questions an analyst will ask, and which tool answers each |
 | `docs/EVALS.md` | Eval cases and the analysis of every run |
 | `docs/DATA_NOTES.md` | Data quality checks, calibration, known limitations |
