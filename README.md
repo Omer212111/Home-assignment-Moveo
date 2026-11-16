@@ -19,6 +19,7 @@ from the engine, and the evals check that.
 **Live demo:** https://hub-weather-risk.onrender.com/ (password protected; free hosting plan, so the first
 request after 15 idle minutes takes about a minute to wake the service).
 **One-page design summary:** [docs/DESIGN_SUMMARY.pdf](docs/DESIGN_SUMMARY.pdf).
+**Full sessions with the AI agent (Claude Code):** [section 13](#13-ai-agent-sessions).
 
 ## Architecture at a glance
 
@@ -93,8 +94,8 @@ flowchart LR
 9. [Data storage choice](#9-data-storage-choice)
 10. [Repository structure](#10-repository-structure)
 11. [Assumptions, limitations and uncertainty](#11-assumptions-limitations-and-uncertainty)
-12. [Status and next steps](#12-status-and-next-steps)
-13. [Documentation index](#13-documentation-index)
+12. [Documentation index](#12-documentation-index)
+13. [AI agent sessions](#13-ai-agent-sessions)
 
 ---
 
@@ -160,7 +161,14 @@ runs as a non-root user with a health check on `/health`.
 
 ### Option C: deployed to a URL
 
-See [section 1a](#1a-deploy-to-a-url-render).
+The live demo is at https://hub-weather-risk.onrender.com/. The browser asks for a login:
+
+| Field | Value |
+|---|---|
+| User name | any value (for example `demo`); only the password is checked |
+| Password | `Omer2106!` |
+
+`/health` is open without a password. To deploy your own copy, see [section 1a](#1a-deploy-to-a-url-render).
 
 ### Refreshing the data (ingestion)
 
@@ -478,6 +486,20 @@ More diagrams: `docs/ARCHITECTURE.md`, `docs/DATA_MODEL.md`. PNG/SVG export of t
 | Scores | **SQLite scoring tables**, one set per scoring run (`rule_sets`, `scoring_runs`, `hub_results`, `hazard_scores`, `disruption_days`); the active run cached in memory | KPI per hub and hazard, drivers, every disruption day | Every score traceable to the exact rules and data; runs can be compared (risk-change alerts); a new run reaches the running server without a restart |
 | Trajectories | JSON files (`data/trajectories/`, `evals/trajectories/`) | Step-by-step record of each question | Easy to open, diff and attach to a bug report |
 
+**Why this setup.** Some of these choices were made so the assignment could be finished by the
+deadline and the deployment would be safer:
+
+- **Deadline.** SQLite and a parquet snapshot in git need no database server to set up, migrate or
+  pay for. The time went into the scoring engine, the agent and the evals instead of infrastructure.
+- **Safer deployment.** The service calls no weather API at runtime and connects to no external
+  database, so there are no database credentials to store or network access to secure, and a slow or
+  rate-limited public API cannot break the demo. On every deploy the database is rebuilt from the
+  reviewed snapshot in the image, so each deploy starts from known data and a bad database state
+  cannot carry over. Everything runs in one container.
+
+The trade-off: chat history and alerts are lost on restart (no persistent disk on the free plan), and
+the data is only as fresh as the last snapshot. For production, the scale-out path is described below.
+
 All tables and how they connect: `docs/DATA_MODEL.md` (entity-relationship diagram).
 
 Scale-out path: the target data model in `docs/DATA_MODEL_SCALABLE.md` (Postgres with partitioned
@@ -518,7 +540,7 @@ data/
   snapshot/             parquet snapshot (in git)
 evals/                  cases.yaml (24 cases), checks.py, run.py, history/, trajectories/
 tests/                  offline tests (92)
-docs/                   design documents and the one-page PDF summary (section 13)
+docs/                   design documents and the one-page PDF summary (section 12)
 .github/workflows/      CI: the offline tests on every push
 ```
 
@@ -547,22 +569,7 @@ Every answer from the agent carries `assumptions`, `confidence` and `uncertainty
 
 ---
 
-## 12. Status and next steps
-
-**Built and deployed** (https://hub-weather-risk.onrender.com/): data ingestion; deterministic scoring
-engine with month / season / year breakdowns; standardised index and tiers; scores stored per
-scoring run; a 5-tool agent with strict JSON contracts and guardrails; the API and chat page (agent
-steps, alerts); trajectories; alerts (monthly outlook + score change) safe under concurrency; 92
-offline tests with CI; a 24-case eval set (8 runs analysed in `docs/EVALS.md`; the latest full run
-before the robustness cases: 110/111 correctness checks).
-
-**Next:** eval run on the 24-case set; bonus voice input (browser Web Speech API) and live NWS alerts.
-Longer-term improvements (cost in dollars, tail risk, FEMA National Risk Index, uncertainty ranges)
-are in `docs/IMPROVEMENTS.md`.
-
----
-
-## 13. Documentation index
+## 12. Documentation index
 
 | Document | Contents |
 |---|---|
@@ -577,3 +584,20 @@ are in `docs/IMPROVEMENTS.md`.
 | `docs/IMPROVEMENTS.md` | What to build next and why |
 | `docs/PLAN.md`, `docs/PLAN-v2-slices.md` | The original plan (historical: written before the build) |
 | `docs/HANDOFF.md` | State of the project for continuing in a new AI session |
+
+---
+
+## 13. AI agent sessions
+
+The project was built with Claude Code (Anthropic's coding agent). These links are the full
+sessions: the plan, every prompt, the agent's reasoning, tool calls and code changes.
+
+| # | Session |
+|---|---|
+| 1 | https://claude.ai/code/cshk_011hVRPbfb61h2dKkLurXcKo2F25mKZuBMUTmrVTZEwg3i |
+| 2 | https://claude.ai/code/cshk_011hVRPXqiRTcMk6kbKtmVuhXG9K4y9H3WPXBQShT8GP5K |
+| 3 | https://claude.ai/code/cshk_011hVRPayq9yfkbEahWCPf9x8UKxB25B9dFPWhyYCcuVx4 |
+
+The plan written at the start of the work is also in the repository: `docs/PLAN.md` (the original
+plan) and `docs/PLAN-v2-slices.md` (the build split into slices). `docs/HANDOFF.md` is the summary
+used to carry the project from one session to the next.

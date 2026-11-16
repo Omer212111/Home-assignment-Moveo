@@ -7,57 +7,13 @@ are in `docs/DESIGN_DECISIONS.md`.
 
 ## 1. Components and how they talk to each other
 
-```mermaid
----
-config:
-  flowchart:
-    curve: basis
-    nodeSpacing: 28
-    rankSpacing: 45
----
-flowchart LR
+![System architecture](img/architecture-1.svg)
 
-    subgraph SVC["FastAPI service · one container, one process"]
-        direction TB
-        DB[("<b>SQLite</b> (WAL)<br/>source tables · scoring runs<br/>conversations · alerts")]
-        ENG["<b>Scoring service</b><br/>active scoring run, cached in memory"]
-        CHAT["<b>POST /chat</b>"]
-        AGENT["<b>Agent loop</b><br/>strict tool schemas · ModelAnswer<br/>guardrails · trajectories"]
-        TOOLS["<b>5 tools</b><br/>rank · explain · compare · breakdown · weather_stat"]
-        REST["<b>GET /rankings · /hubs · /health</b><br/>no LLM"]
-        ALERT["<b>Alerts</b><br/>monthly outlook · score change<br/>outbox delivery"]
-        DB --> ENG
-        CHAT --> AGENT --> TOOLS --> ENG
-        REST --> ENG
-        ENG --> ALERT
-        ALERT <--> DB
-        CHAT <-. "history" .-> DB
-    end
-
-    UI["<b>Chat page</b><br/>static HTML/JS<br/>answer · details · agent steps · alerts"]
-    CLAUDE["<b>Anthropic API</b><br/>Claude Sonnet 5.5"]
-    HOOK["<b>Webhook</b><br/>Slack-compatible JSON"]
-    EVAL["<b>Eval runner</b><br/>24 cases · history"]
-
-    UI -- "HTTP JSON" --> CHAT
-    EVAL -- "same agent loop" --> AGENT
-    AGENT <-- "Messages API" --> CLAUDE
-    ALERT -- "POST" --> HOOK
-
-    classDef client fill:#f3eefa,stroke:#7d5bb5,color:#271a3b
-    classDef api fill:#e8f1fb,stroke:#3b78c3,color:#13263d
-    classDef agent fill:#fff4e5,stroke:#d9822b,color:#3d2a12
-    classDef ext fill:#fdecec,stroke:#c0504d,color:#3b1414
-    classDef eng fill:#eaf6ec,stroke:#3c9a52,color:#14301b
-    classDef batch fill:#eef3f3,stroke:#5b8a8a,color:#1d2e2e
-    classDef group fill:#fafafa,stroke:#c8c8c8,color:#444
-    class UI,EVAL client
-    class CHAT,REST api
-    class AGENT,TOOLS,ALERT agent
-    class CLAUDE,HOOK ext
-    class ENG,DB eng
-    class SVC group
-```
+**How to read it.** The browser sends a question to `POST /chat`. The agent loop asks Claude what to
+do; when Claude asks for a tool, the loop runs it against the scoring service and sends the result
+back, until Claude writes the final answer (at most 2 tool rounds). Every number comes from the
+scoring service, never from the LLM. `GET /rankings` and `/hubs/{id}` read the same scores directly,
+without the LLM. A background job sends alerts to a webhook.
 
 **Main design choice: no weather API at runtime.** The service never calls a weather API to answer
 a question. It starts from the committed parquet snapshot, so the demo works when a public API is
