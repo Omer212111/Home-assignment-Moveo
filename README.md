@@ -168,45 +168,7 @@ failed ingestion) and prints which hub scores moved; a running server serves it 
 
 ---
 
-## 1a. Deploy to a URL (Render)
 
-The repository includes a `Dockerfile` and a Render Blueprint (`render.yaml`), so deploying is a few
-clicks. Render builds the image from GitHub and redeploys on every push to `main`.
-
-**1. Create the service**
-1. Sign in at [render.com](https://render.com) with your GitHub account.
-2. **New > Blueprint**, select this repository, branch `main`. Render reads `render.yaml` and
-   proposes one web service, `hub-weather-risk` (Docker, health check `/health`).
-3. It asks for the secret values (never committed):
-   - `ANTHROPIC_API_KEY`: **required** for the chat.
-   - `APP_PASSWORD`: **strongly recommended**. Anyone who finds the URL could otherwise use the chat
-     on your API credits. With it set, the browser asks for a password (any user name).
-   - `ALERT_WEBHOOK_URL`: optional, where alerts are posted (leave empty to see them in the page).
-4. **Apply**. The first build takes a few minutes; the URL is shown at the top of the service page
-   (`https://hub-weather-risk-xxxx.onrender.com`).
-
-**2. Check it**
-- `https://<your-url>/health` returns `{"status": "ok", "hubs": 50, ...}` (no password needed).
-- Open `https://<your-url>/`, enter the password, ask "What are the 10 most dangerous hubs?".
-
-**Good to know**
-- **Free plan sleeps after 15 minutes without traffic**; the next request wakes it in about a
-  minute. Before a demo, open the URL a few minutes early (or use the Starter plan, always on).
-- **No persistent disk on the free plan**: on every restart or deploy the database is rebuilt from
-  the snapshot in the image and scored again (~1 s). Chat history, trajectories and alerts start
-  empty; the scores and data are always the same. A persistent disk (paid) or Postgres would keep them.
-- **Score-change alerts need a persistent database.** Without a disk, production starts each deploy
-  with an empty database, so there is no previous scoring run to compare with; the change alert
-  then appears where the database persists (the laptop that ran ingestion prints the moved scores).
-- **One instance, one worker**: the score cache and the alert loop run in the process; the design is
-  safe with several instances (`docs/DESIGN_DECISIONS.md` section 21), but one is enough here.
-- **Cost control**: set a monthly spend limit on the API key's workspace in the Anthropic Console;
-  a chat question costs about $0.03.
-- **Without the Blueprint**: New > Web Service, pick the repository, runtime **Docker**, health check
-  path `/health`, and add the same environment variables. Any Docker host works the same way
-  (Fly.io, Railway, Google Cloud Run, Azure Container Apps): the app listens on `$PORT`.
-
----
 
 ## 2. Using the chat
 
