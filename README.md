@@ -444,6 +444,10 @@ More diagrams: `docs/ARCHITECTURE.md`, `docs/DATA_MODEL.md`. The diagram above i
 **Why this setup.** Some of these choices were made so the assignment could be finished by the
 deadline and the deployment would be safer:
 
+- **API request limits.** The free Open-Meteo API limits how many requests can be made (it counts a
+  long request as several calls), and the quota ran out during this project. So the data is
+  downloaded once by the offline ingestion and committed as a snapshot; the app, the tests and the
+  evals never spend quota.
 - **Deadline.** SQLite and a parquet snapshot in git need no database server to set up, migrate or
   pay for. The time went into the scoring engine, the agent and the evals instead of infrastructure.
 - **Safer deployment.** The service calls no weather API at runtime and connects to no external
@@ -505,6 +509,10 @@ docs/                   design documents and the one-page PDF summary (section 1
 
 Every answer from the agent carries `assumptions`, `confidence` and `uncertainty_notes`. The main ones:
 
+- **The hub list is my own assumption.** The assignment does not say which hubs the company has, so I
+  chose the 50 most populous US cities (Census 2023 city estimates), one hub per city at the city
+  centre (`config/hubs.yaml`). Ranks around #48-52 are within a few thousand residents of each
+  other, so the cut-off at 50 is approximate.
 - **Thresholds are expert judgment**, not calibrated on the company's own downtime data. The KPI is
   for ranking and comparing hubs, not a forecast of lost days. With the company's downtime logs the
   rules should be fitted (`docs/IMPROVEMENTS.md`).
