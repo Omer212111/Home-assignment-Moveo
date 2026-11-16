@@ -16,44 +16,33 @@ config:
     rankSpacing: 45
 ---
 flowchart LR
-    subgraph OFF["Offline ingestion · laptop, on demand"]
-        direction TB
-        APIS["<b>Public APIs</b><br/>Open-Meteo · OpenFEMA"]
-        ING["<b>app/ingest.py</b><br/>fetch · validate (Pydantic)<br/>→ new scoring run"]
-        SNAP[("<b>parquet snapshot</b><br/>committed to git")]
-        APIS --> ING --> SNAP
-    end
-
-    GIT["<b>GitHub main</b><br/>CI: offline tests<br/>Render: auto-deploy"]
+    UI["<b>Chat page</b><br/>answer · details · agent steps · alerts"]
+    CLIENTS["<b>API clients</b><br/>BI · scripts · Swagger /docs"]
 
     subgraph SVC["FastAPI service · one container, one process"]
         direction TB
-        DB[("<b>SQLite</b> (WAL)<br/>source tables · scoring runs<br/>conversations · alerts")]
-        ENG["<b>Scoring service</b><br/>active scoring run, cached in memory"]
         CHAT["<b>POST /chat</b>"]
         AGENT["<b>Agent loop</b><br/>strict tool schemas · ModelAnswer<br/>guardrails · trajectories"]
         TOOLS["<b>5 tools</b><br/>rank · explain · compare · breakdown · weather_stat"]
-        REST["<b>GET /rankings · /hubs · /health</b><br/>no LLM"]
+        REST["<b>GET /rankings · /hubs</b><br/>deterministic, no LLM"]
+        ENG["<b>Scoring service</b><br/>active scoring run, cached in memory"]
+        DB[("<b>SQLite</b><br/>restored from the parquet snapshot at startup<br/>scoring runs · conversations · alerts")]
         ALERT["<b>Alerts</b><br/>monthly outlook · score change<br/>outbox delivery"]
-        DB --> ENG
         CHAT --> AGENT --> TOOLS --> ENG
         REST --> ENG
+        DB --> ENG
         ENG --> ALERT
         ALERT <--> DB
         CHAT <-. "history" .-> DB
     end
 
-    UI["<b>Chat page</b><br/>static HTML/JS<br/>answer · details · agent steps · alerts"]
-    CLAUDE["<b>Anthropic API</b><br/>Claude Sonnet 5.5"]
+    CLAUDE["<b>Anthropic Messages API</b><br/>Claude Sonnet 5.5"]
     HOOK["<b>Webhook</b><br/>Slack-compatible JSON"]
-    EVAL["<b>Eval runner</b><br/>24 cases · history"]
 
-    SNAP -- "git push" --> GIT
-    GIT -- "Docker image with the snapshot" --> DB
     UI -- "HTTP JSON" --> CHAT
-    UI -.-> REST
-    EVAL -- "same agent loop" --> AGENT
-    AGENT <-- "Messages API" --> CLAUDE
+    UI -- "GET /alerts" --> ALERT
+    CLIENTS -- "HTTP JSON" --> REST
+    AGENT <--> CLAUDE
     ALERT -- "POST" --> HOOK
 
     classDef client fill:#f3eefa,stroke:#7d5bb5,color:#271a3b
@@ -61,22 +50,21 @@ flowchart LR
     classDef agent fill:#fff4e5,stroke:#d9822b,color:#3d2a12
     classDef ext fill:#fdecec,stroke:#c0504d,color:#3b1414
     classDef eng fill:#eaf6ec,stroke:#3c9a52,color:#14301b
-    classDef batch fill:#eef3f3,stroke:#5b8a8a,color:#1d2e2e
     classDef group fill:#fafafa,stroke:#c8c8c8,color:#444
-    class UI,EVAL client
+    class UI,CLIENTS client
     class CHAT,REST api
     class AGENT,TOOLS,ALERT agent
-    class CLAUDE,HOOK,APIS ext
+    class CLAUDE,HOOK ext
     class ENG,DB eng
-    class ING,SNAP,GIT batch
-    class OFF,SVC group
+    class SVC group
 ```
 
-**Main design choice: batch ingestion is separate from serving.** The service never calls a weather
-API to answer a question. It starts from the committed snapshot, so the demo works when a public API
-is down or rate-limited, answers are fast, and evals run on identical data every time. New data
-reaches production as a commit: ingest → snapshot → push → CI → Render rebuilds → the app scores the
-new data at startup.
+**Main design choice: no weather API at runtime.** The service never calls a weather API to answer
+a question. It starts from the committed parquet snapshot, so the demo works when a public API is
+down or rate-limited, answers are fast, and evals run on identical data every time. How the data is
+downloaded, refreshed and deployed is a setup step (README section 1, "Refreshing the data").
+`GET /rankings` and `/hubs` are the deterministic API for other consumers (BI, scripts, Swagger at
+`/docs`); the chat page uses `POST /chat` and `GET /alerts`.
 
 ## 2. One chat question, step by step
 
@@ -116,7 +104,7 @@ sequenceDiagram
 The LLM never produces a number: it chooses tools and writes the explanation; every number comes from
 the engine, and the evals check it (`docs/EVALS.md`).
 
-## 3. Background flows: startup, new data, alerts
+## 3. Background flows: startup, scoring runs, alerts
 
 ```mermaid
 flowchart TB
@@ -128,8 +116,6 @@ flowchart TB
     LOAD --> SERVE["serve requests from the cached run<br/>(reload within 5 s if another run becomes active)"]
     CHANGE --> SERVE
 
-    INGEST["<b>Ingestion</b> (laptop)"] --> NEWRUN["new data → new scoring run<br/>(never after a failed download)"]
-    NEWRUN --> CHANGE
 
     TICK["<b>Alert loop</b> every 60 s<br/>(+ POST /alerts/check)"] --> OUTLOOK["monthly outlook due?<br/>(7 days before the month, dedup key per month)"]
     TICK --> SEND["deliver pending alerts<br/>(claim with a lease, retry, at-least-once)"]
@@ -140,8 +126,8 @@ flowchart TB
     classDef step fill:#eaf6ec,stroke:#3c9a52,color:#14301b
     classDef alert fill:#fff4e5,stroke:#d9822b,color:#3d2a12
     classDef start fill:#e8f1fb,stroke:#3b78c3,color:#13263d
-    class START,INGEST,TICK start
-    class RESTORE,MATCH,LOAD,SCORE,SERVE,NEWRUN step
+    class START,TICK start
+    class RESTORE,MATCH,LOAD,SCORE,SERVE step
     class CHANGE,OUTLOOK,SEND,WEBHOOK alert
 ```
 
@@ -150,8 +136,7 @@ flowchart TB
 | Component | Technology | Why this choice |
 |---|---|---|
 | Hub list | `config/hubs.yaml`, validated by Pydantic | business config, editable without code |
-| Ingestion | Python CLI, httpx + tenacity retries, local response cache | runs where the API quota allows; decoupled from serving; ends with a scoring run |
-| Storage | parquet snapshot in git + SQLite (WAL) | small relational data, no server to run, reproducible; plain SQL for a later Postgres move |
+| Storage | parquet snapshot in git (restored at startup) + SQLite (WAL) | small relational data, no server to run, reproducible; plain SQL for a later Postgres move |
 | Scoring engine | pure Python + pandas, rules in `config/disruption.yaml` | deterministic and explainable; analysts edit thresholds, not code |
 | Scoring runs | SQLite tables, one set per run (rules hash + data fingerprint) | every score traceable and comparable; computed on write, cached in memory |
 | Index and tiers | fixed reference in the rules (100 = median hub) | comparable, stable scores; pro-rated per month and season |

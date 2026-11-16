@@ -31,42 +31,33 @@ config:
     rankSpacing: 45
 ---
 flowchart LR
-    subgraph OFF["1 · Offline ingestion · laptop, on demand"]
-        direction TB
-        APIS["<b>Public APIs</b><br/>Open-Meteo · OpenFEMA"]
-        ING["<b>app/ingest.py</b><br/>fetch · validate<br/>→ new scoring run"]
-        SNAP[("<b>parquet snapshot</b><br/>committed to git")]
-        APIS --> ING
-        ING --> SNAP
-    end
+    UI["<b>Chat page</b><br/>answer · details · agent steps · alerts"]
+    CLIENTS["<b>API clients</b><br/>BI · scripts · Swagger /docs"]
 
-    GIT["<b>2 · GitHub main</b><br/>CI runs the tests<br/>Render auto-deploys"]
-
-    subgraph SVC["3 · FastAPI service · Docker on Render (one process)"]
+    subgraph SVC["FastAPI service · one container, one process"]
         direction TB
-        DB[("<b>SQLite</b><br/>restored from the snapshot at startup<br/>scoring runs · conversations · alerts")]
-        ENG["<b>Scoring service</b><br/>active scoring run, cached in memory"]
         CHAT["<b>POST /chat</b>"]
-        AGENT["<b>Agent loop</b><br/>tool use + JSON schemas · guardrails"]
+        AGENT["<b>Agent loop</b><br/>strict tool schemas · ModelAnswer<br/>guardrails · trajectories"]
         TOOLS["<b>5 tools</b><br/>rank · explain · compare · breakdown · weather_stat"]
-        REST["<b>GET /rankings · /hubs</b> · no LLM"]
-        ALERT["<b>Alerts</b><br/>monthly outlook · score change"]
-        DB --> ENG
+        REST["<b>GET /rankings · /hubs</b><br/>deterministic, no LLM"]
+        ENG["<b>Scoring service</b><br/>active scoring run, cached in memory"]
+        DB[("<b>SQLite</b><br/>restored from the parquet snapshot at startup<br/>scoring runs · conversations · alerts")]
+        ALERT["<b>Alerts</b><br/>monthly outlook · score change<br/>outbox delivery"]
         CHAT --> AGENT --> TOOLS --> ENG
         REST --> ENG
+        DB --> ENG
         ENG --> ALERT
+        ALERT <--> DB
         CHAT <-. "history" .-> DB
     end
 
-    UI["<b>Chat page</b><br/>answer · details · agent steps"]
-    CLAUDE["<b>Anthropic API</b><br/>Claude Sonnet 5.5"]
+    CLAUDE["<b>Anthropic Messages API</b><br/>Claude Sonnet 5.5"]
     HOOK["<b>Webhook</b><br/>Slack-compatible JSON"]
 
-    SNAP -- "git push" --> GIT
-    GIT -- "Docker image<br/>with the snapshot" --> DB
     UI -- "HTTP JSON" --> CHAT
-    UI -.-> REST
-    AGENT <-- "Messages API" --> CLAUDE
+    UI -- "GET /alerts" --> ALERT
+    CLIENTS -- "HTTP JSON" --> REST
+    AGENT <--> CLAUDE
     ALERT -- "POST" --> HOOK
 
     classDef client fill:#f3eefa,stroke:#7d5bb5,color:#271a3b
@@ -74,25 +65,22 @@ flowchart LR
     classDef agent fill:#fff4e5,stroke:#d9822b,color:#3d2a12
     classDef ext fill:#fdecec,stroke:#c0504d,color:#3b1414
     classDef eng fill:#eaf6ec,stroke:#3c9a52,color:#14301b
-    classDef batch fill:#eef3f3,stroke:#5b8a8a,color:#1d2e2e
     classDef group fill:#fafafa,stroke:#c8c8c8,color:#444
-    class UI client
+    class UI,CLIENTS client
     class CHAT,REST api
     class AGENT,TOOLS,ALERT agent
-    class CLAUDE,HOOK,APIS ext
+    class CLAUDE,HOOK ext
     class ENG,DB eng
-    class ING,SNAP,GIT batch
-    class OFF,SVC group
+    class SVC group
 ```
 
-1. **Offline ingestion** (on a laptop, on demand: monthly or quarterly is enough) downloads from the
-   public APIs, validates, writes the parquet snapshot and creates a scoring run.
-2. **The snapshot is committed**; a push to `main` runs the tests in CI and Render redeploys.
-3. **The service never calls a weather API**: at startup it restores the snapshot into SQLite and
-   scores it once; chat, tools, `/rankings` and alerts read the active scoring run.
-
-How one chat question flows through the agent: [section 4](#4-the-agent). When and why ingestion
-runs: [section 7](#7-data-and-ingestion).
+- **One process** serves the chat page, the API, the agent and the alerts. The chat page talks to
+  `POST /chat` (and `GET /alerts`); `GET /rankings` and `/hubs` are the deterministic, no-LLM API for
+  other consumers (BI, scripts, Swagger at `/docs`).
+- **The service never calls a weather API.** At startup it restores the committed parquet snapshot
+  into SQLite and serves the active scoring run; the agent's tools read it from memory.
+- How the data is refreshed and deployed is part of setup: [section 1](#1-run-it).
+  How one chat question flows through the agent: [section 4](#4-the-agent).
 
 ---
 
@@ -103,7 +91,7 @@ runs: [section 7](#7-data-and-ingestion).
 4. [The agent](#4-the-agent)
 5. [API](#5-api)
 6. [Evaluation](#6-evaluation)
-7. [Data and ingestion](#7-data-and-ingestion)
+7. [Data](#7-data)
 8. [Architecture](#8-architecture)
 9. [Data storage choice](#9-data-storage-choice)
 10. [Repository structure](#10-repository-structure)
@@ -176,6 +164,34 @@ runs as a non-root user with a health check on `/health`.
 ### Option C: deployed to a URL
 
 See [section 1a](#1a-deploy-to-a-url-render).
+
+### Refreshing the data (ingestion)
+
+Not needed to run the app: the data is in the repository. Ingestion is an offline command that
+downloads from the public APIs, validates the data, writes the parquet snapshot and creates a new
+scoring run. Run it on a machine with Open-Meteo quota, then commit the snapshot.
+
+**When to run ingestion:** the first build of the dataset; a data refresh (a new year of weather,
+new FEMA declarations: monthly or quarterly is plenty, the KPI is a 5-year average); a hub added to
+`config/hubs.yaml` (`--hubs new_id`); a longer history or a new variable; a change in the cleaning
+logic. **Never** at server startup, per question, or on Render.
+
+**Why it is separate from the app:** the APIs are slow, rate-limited and sometimes unreachable (the
+Open-Meteo free quota ran out during this project); historical data barely changes; questions are
+answered in milliseconds from local data; evals run on identical data every time; and a refresh
+becomes a new scoring run that can be compared with the previous one (and alerted on).
+
+**A refresh reaching production:** ingest on the laptop -> commit the snapshot -> push -> CI runs
+the tests -> Render rebuilds the image -> the app scores the new data at startup.
+
+```
+uv run python -m app.ingest --status
+uv run python -m app.ingest
+```
+
+Options: `--source weather|declarations`, `--hubs denver,miami`,
+`--no-score`. **Ingestion ends by creating a new scoring run** if the data changed (never after a
+failed ingestion) and prints which hub scores moved; a running server serves it within 5 seconds.
 
 ### Settings (`.env`)
 
@@ -427,7 +443,7 @@ Results so far (details and what changed after each run in `docs/EVALS.md`):
 
 ---
 
-## 7. Data and ingestion
+## 7. Data
 
 | Source | Used for | Coverage |
 |---|---|---|
@@ -435,30 +451,7 @@ Results so far (details and what changed after each run in `docs/EVALS.md`):
 | [OpenFEMA Disaster Declarations](https://www.fema.gov/openfema-data-page/disaster-declarations-summaries-v2) | hurricanes, severe storms per county | 47 counties, 669 rows = 481 distinct disasters (2006-2026) |
 | `config/hubs.yaml` | the 50 hubs: coordinates, county FIPS, Census region | |
 
-**When to run ingestion:** the first build of the dataset; a data refresh (a new year of weather,
-new FEMA declarations: monthly or quarterly is plenty, the KPI is a 5-year average); a hub added to
-`config/hubs.yaml` (`--hubs new_id`); a longer history or a new variable; a change in the cleaning
-logic. **Never** at server startup, per question, or on Render.
-
-**Why it is separate from the app:** the APIs are slow, rate-limited and sometimes unreachable (the
-Open-Meteo free quota ran out during this project); historical data barely changes; questions are
-answered in milliseconds from local data; evals run on identical data every time; and a refresh
-becomes a new scoring run that can be compared with the previous one (and alerted on).
-
-**A refresh reaching production:** ingest on the laptop -> commit the snapshot -> push -> CI runs
-the tests -> Render rebuilds the image -> the app scores the new data at startup.
-
-The data is downloaded by an offline command, never by the web service:
-
-```
-uv run python -m app.ingest --status
-uv run python -m app.ingest
-```
-
-Options: `--source weather|declarations`, `--hubs denver,miami`,
-`--no-score`. **Ingestion ends by creating a new scoring run** if the data changed (never after a
-failed ingestion) and prints which hub scores moved; a running server serves it within 5 seconds.
-The weather download needs a machine with Open-Meteo quota (the free tier is limited).
+How the data is downloaded and refreshed (ingestion) is part of setup: [section 1](#refreshing-the-data-ingestion).
 
 ---
 
@@ -468,11 +461,11 @@ The weather download needs a machine with Open-Meteo quota (the free tier is lim
 
 The component diagram is at the top of this page ([Architecture at a glance](#architecture-at-a-glance)).
 
-- **One process** serves the chat page, the API and the agent. The page is a plain client of
-  `POST /chat`; the deterministic endpoints (`/rankings`, `/hubs`) answer without the LLM.
-- **Batch ingestion is separate from serving.** The service never calls a weather API to answer a
-  question: SQLite is restored from the committed snapshot at startup, and the scores come from the
-  active scoring run. The demo works when a public API is down, answers are fast, evals repeatable.
+- **One process** serves the chat page, the API, the agent and the alerts. The page is a plain client
+  of `POST /chat`; the deterministic endpoints (`/rankings`, `/hubs`) answer API clients without the LLM.
+- **No weather API at runtime.** SQLite is restored from the committed snapshot at startup and the
+  scores come from the active scoring run, so the demo works when a public API is down, answers are
+  fast, and evals are repeatable. Refreshing the data is a setup step ([section 1](#refreshing-the-data-ingestion)).
 
 More diagrams: `docs/ARCHITECTURE.md`, `docs/DATA_MODEL.md`. PNG/SVG export of the diagram above:
 `docs/img/architecture-agent-1`.
