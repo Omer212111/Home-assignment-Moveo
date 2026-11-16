@@ -59,8 +59,9 @@ result back (at most 2 rounds) until Claude writes the final answer. <code>GET /
 <div>
   <h2>Agent loop (<code>app/agent/loop.py</code>)</h2>
   <ul>
-    <li><b>Hand-written tool-use loop</b> around Claude Sonnet 5.5, no framework; every step is logged as a
-      <b>trajectory</b> and shown in the chat ("Agent steps").</li>
+    <li><b>Hand-written tool-use loop</b> around Claude Sonnet 5.5, <b>no framework</b> (my choice): the loop is simple
+      (call the model, run the tools, repeat), so a framework would add dependency problems and setup time without
+      real benefit. Every step is logged as a <b>trajectory</b> and shown in the chat ("Agent steps").</li>
     <li><b>5 tools</b>: <code>rank_hubs</code>, <code>explain_hub</code>, <code>compare_hubs</code>, <code>hub_breakdown</code>,
       <code>weather_stat</code>. Inputs are <b>strict JSON schemas</b> from Pydantic, validated again; invalid arguments go back as errors.</li>
     <li><b>JSON contract for the answer:</b> structured output <code>ModelAnswer</code> (answer, assumptions, confidence, uncertainty,
