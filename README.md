@@ -505,6 +505,10 @@ docs/                   design documents and the one-page PDF summary (section 1
 
 Every answer from the agent carries `assumptions`, `confidence` and `uncertainty_notes`. The main ones:
 
+- **The hub list is my own assumption.** The assignment does not say which hubs the company has, so I
+  chose the 50 most populous US cities (Census 2023 city estimates), one hub per city at the city
+  centre (`config/hubs.yaml`). Ranks around #48-52 are within a few thousand residents of each
+  other, so the cut-off at 50 is approximate.
 - **Thresholds are expert judgment**, not calibrated on the company's own downtime data. The KPI is
   for ranking and comparing hubs, not a forecast of lost days. With the company's downtime logs the
   rules should be fitted (`docs/IMPROVEMENTS.md`).

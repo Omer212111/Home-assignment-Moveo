@@ -5,7 +5,7 @@
 
 ## The problem
 
-A logistics company runs 50 distribution hubs across the US and each year picks a few for
+A logistics company runs distribution hubs across the US and each year picks a few for
 resilience upgrades. This project helps analysts decide which hubs are most exposed to weather
 disruption. They can ask questions in plain English and follow up, for example "Which Midwest hubs
 are most exposed to winter disruption?" or "Why is Dallas's risk high?".
@@ -56,6 +56,8 @@ comes from a tool result.
 
 ## Assumptions and limitations
 
+- **The hubs are my choice.** The assignment does not list the company's hubs. I decided to use the
+  50 most populous US cities (Census 2023 estimates), with one hub at each city centre.
 - The thresholds are expert judgment. They have not been fitted to the company's own downtime data.
 - Five years of weather is a small sample.
 - Hurricanes are measured by how often disasters were declared, not by the size of their worst
