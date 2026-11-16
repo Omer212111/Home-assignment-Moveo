@@ -19,6 +19,7 @@ from the engine, and the evals check that.
 **Live demo:** https://hub-weather-risk.onrender.com/ (password protected; free hosting plan, so the first
 request after 15 idle minutes takes about a minute to wake the service).
 **One-page design summary:** [docs/DESIGN_SUMMARY.pdf](docs/DESIGN_SUMMARY.pdf).
+**Full sessions with the AI agent (Claude Code):** [section 13](#13-ai-agent-sessions).
 
 ## Architecture at a glance
 
@@ -94,6 +95,7 @@ flowchart LR
 10. [Repository structure](#10-repository-structure)
 11. [Assumptions, limitations and uncertainty](#11-assumptions-limitations-and-uncertainty)
 12. [Documentation index](#12-documentation-index)
+13. [AI agent sessions](#13-ai-agent-sessions)
 
 ---
 
@@ -582,3 +584,19 @@ Every answer from the agent carries `assumptions`, `confidence` and `uncertainty
 | `docs/IMPROVEMENTS.md` | What to build next and why |
 | `docs/PLAN.md`, `docs/PLAN-v2-slices.md` | The original plan (historical: written before the build) |
 | `docs/HANDOFF.md` | State of the project for continuing in a new AI session |
+
+---
+
+## 13. AI agent sessions
+
+The project was built with Claude Code (Anthropic's coding agent). These links are the full
+sessions: the plan, every prompt, the agent's reasoning, tool calls and code changes.
+
+| # | Session |
+|---|---|
+| 1 | https://claude.ai/code/cshk_011hVRPbfb61h2dKkLurXcKo2F25mKZuBMUTmrVTZEwg3i |
+| 2 | https://claude.ai/code/cshk_011hVRPayq9yfkbEahWCPf9x8UKxB25B9dFPWhyYCcuVx4 |
+
+The plan written at the start of the work is also in the repository: `docs/PLAN.md` (the original
+plan) and `docs/PLAN-v2-slices.md` (the build split into slices). `docs/HANDOFF.md` is the summary
+used to carry the project from one session to the next.
