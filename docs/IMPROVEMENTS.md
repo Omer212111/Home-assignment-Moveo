@@ -1,6 +1,6 @@
 # Improvements: what could come next
 
-The baseline and its extensions are built (README section 12). This list is what would come next,
+The baseline and its extensions are built. This list is what would come next,
 ordered roughly by value for the investment decision. Status as of 2026-11-16: sections 1-7 and 9
 are open; section 8 is done except D; built since the list was written: standardised index and
 tiers, scoring runs, alerts, time breakdowns, deployment (see `docs/DESIGN_DECISIONS.md` 14-22).
