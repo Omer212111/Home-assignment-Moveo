@@ -7,74 +7,7 @@ are in `docs/DESIGN_DECISIONS.md`.
 
 ## 1. Components and how they talk to each other
 
-```mermaid
----
-config:
-  flowchart:
-    curve: basis
-    nodeSpacing: 28
-    rankSpacing: 45
----
-flowchart LR
-
-    UI["<b>Chat page</b><br/>browser, static HTML/JS"]
-    SNAP[("<b>Parquet snapshot</b><br/>weather + FEMA data<br/>baked into the image")]
-    CLAUDE["<b>Anthropic API</b><br/>Claude Sonnet 5.5"]
-    HOOK["<b>Webhook</b><br/>Slack-compatible"]
-
-    subgraph SVC["FastAPI service · Docker on Render · one process"]
-        direction LR
-        CHAT["<b>POST /chat</b>"]
-        REST["<b>GET /rankings · /hubs/{id}</b><br/>no LLM"]
-
-        subgraph LOOP["Agent loop · max 6 model calls"]
-            direction TB
-            CALL["<b>Call Claude</b><br/>question + history<br/>+ 5 tool schemas"]
-            DECIDE{"Claude's reply"}
-            RUN["<b>Run requested tools</b><br/>validate args (Pydantic)"]
-            FINAL["<b>Validate final answer</b><br/>ModelAnswer JSON"]
-            CALL --> DECIDE
-            DECIDE -- "tool_use" --> RUN
-            RUN -- "tool_result<br/>(≤ 2 tool rounds)" --> CALL
-            DECIDE -- "final answer" --> FINAL
-        end
-
-        TOOLS["<b>5 tools</b><br/>rank_hubs · explain_hub · compare_hubs<br/>hub_breakdown · weather_stat"]
-        ENG["<b>Scoring service</b><br/>disruption scores per hub<br/>cached in memory"]
-        DB[("<b>SQLite</b><br/>weather data · scoring runs<br/>conversations · alerts")]
-        ALERT["<b>Alerts job</b><br/>every 60 s: monthly outlook<br/>· score change"]
-
-        CHAT -- "question + last 6 turns" --> CALL
-        FINAL -- "answer" --> CHAT
-        CHAT <-. "read history / save turn" .-> DB
-        RUN --> TOOLS --> ENG
-        REST --> ENG
-        DB -- "active scoring run" --> ENG
-        ENG --> ALERT
-        ALERT <--> DB
-    end
-
-    UI -- "question {message, session_id}" --> CHAT
-    CHAT -- "answer + tool calls + agent steps" --> UI
-    CALL <-- "Messages API" --> CLAUDE
-    SNAP -- "loaded at startup" --> DB
-    ALERT -- "POST" --> HOOK
-
-    classDef client fill:#f3eefa,stroke:#7d5bb5,color:#271a3b
-    classDef api fill:#e8f1fb,stroke:#3b78c3,color:#13263d
-    classDef agent fill:#fff4e5,stroke:#d9822b,color:#3d2a12
-    classDef ext fill:#fdecec,stroke:#c0504d,color:#3b1414
-    classDef eng fill:#eaf6ec,stroke:#3c9a52,color:#14301b
-    classDef group fill:#fafafa,stroke:#c8c8c8,color:#444
-    classDef loop fill:#fffaf2,stroke:#d9822b,stroke-dasharray:4 3,color:#3d2a12
-    class UI client
-    class CHAT,REST api
-    class CALL,DECIDE,RUN,FINAL,TOOLS,ALERT agent
-    class CLAUDE,HOOK ext
-    class ENG,DB,SNAP eng
-    class SVC group
-    class LOOP loop
-```
+![System architecture](img/architecture-1.svg)
 
 **How to read it.** The browser sends a question to `POST /chat`. The agent loop asks Claude what to
 do; when Claude asks for a tool, the loop runs it against the scoring service and sends the result
