@@ -64,6 +64,24 @@ def client() -> anthropic.Anthropic:
     return _client
 
 
+def check_llm() -> dict:
+    """Is the key valid and Anthropic reachable? Uses the model list (no tokens, no cost)."""
+    try:
+        model = client().models.retrieve(settings.llm_model)
+        return {"ok": True, "model": model.id}
+    except AgentError as exc:
+        return {"ok": False, "error": str(exc)}
+    except anthropic.AuthenticationError:
+        return {"ok": False, "error": "the API key was rejected (401): check ANTHROPIC_API_KEY"}
+    except anthropic.NotFoundError:
+        return {"ok": False, "error": f"model {settings.llm_model} not found for this key"}
+    except anthropic.APIConnectionError as exc:
+        cause = exc.__cause__ or exc.__context__
+        return {"ok": False, "error": f"cannot reach the Anthropic API ({type(cause).__name__}: {cause})"}
+    except anthropic.APIStatusError as exc:
+        return {"ok": False, "error": f"Anthropic API error {exc.status_code}: {exc.message}"}
+
+
 def _final_text(content) -> str | None:
     texts = [b.text for b in content if getattr(b, "type", None) == "text"]
     return texts[-1] if texts else None
@@ -99,7 +117,11 @@ def _call_model(messages: list, tool_choice: dict | None = None) -> object:
     except anthropic.APIStatusError as exc:
         raise AgentError(f"Anthropic API error {exc.status_code}: {exc.message}") from exc
     except anthropic.APIConnectionError as exc:
-        raise AgentError(f"Cannot reach the Anthropic API: {exc}") from exc
+        # The SDK's message is just "Connection error."; the cause says why (DNS, TLS, proxy,
+        # an illegal character in the key header, a timeout).
+        cause = exc.__cause__ or exc.__context__
+        raise AgentError(f"Cannot reach the Anthropic API: {exc}"
+                         + (f" (cause: {type(cause).__name__}: {cause})" if cause else "")) from exc
 
 
 def _ranking_from(calls: list[ToolCall]) -> list[RankedHub] | None:

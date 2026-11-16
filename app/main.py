@@ -100,6 +100,14 @@ def rankings(hazard: Hazard = "total", region: Region | None = None, top_n: int 
     return rank(service.results(), hazard, region, top_n, SEASONS[season] if season else None, order)
 
 
+@app.get("/health/llm")
+def health_llm():
+    """Checks the API key and the connection to Anthropic without spending tokens (model lookup).
+    Behind APP_PASSWORD when it is set (unlike /health)."""
+    from app.agent.loop import check_llm
+    return check_llm()
+
+
 @app.get("/alerts")
 def list_alerts(limit: int = Query(20, ge=1, le=100)):
     """Recent alerts (monthly outlooks and score changes), newest first."""

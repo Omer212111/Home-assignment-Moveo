@@ -1,6 +1,7 @@
 """Runtime settings, read from environment variables or a .env file and validated by Pydantic."""
 from pathlib import Path
 
+from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -48,6 +49,19 @@ class Settings(BaseSettings):
 
     # Optional paid Open-Meteo key: switches to the commercial endpoint (free tier is non-commercial)
     open_meteo_api_key: str | None = None
+
+
+    @field_validator("agent_anthropic_api_key", "anthropic_api_key", "app_password", "alerts_token",
+                     "alert_webhook_url", mode="before")
+    @classmethod
+    def _clean_secret(cls, v):
+        """Secrets pasted into a dashboard often carry a trailing newline, spaces or quotes. A newline
+        in an HTTP header makes the request fail before it is sent, which the SDK reports as
+        "Connection error" (seen on the first Render deploy). Strip them; empty means unset."""
+        if isinstance(v, str):
+            v = v.strip().strip('"').strip("'").strip()
+            return v or None
+        return v
 
 
 settings = Settings()

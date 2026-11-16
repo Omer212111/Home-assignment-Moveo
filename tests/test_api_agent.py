@@ -309,3 +309,32 @@ def test_optional_password_protects_everything_but_health(api, monkeypatch):
     assert api.get("/rankings", headers=ok).status_code == 200
     monkeypatch.setattr(settings, "app_password", None)
     assert api.get("/").status_code == 200
+
+
+def test_pasted_secrets_are_cleaned():
+    """First Render deploy: a key with a trailing newline gave 'Connection error' (illegal header)."""
+    from app.settings import Settings
+    s = Settings(anthropic_api_key="sk-ant-abc\n", app_password='  "pw"  ', alert_webhook_url="")
+    assert s.anthropic_api_key == "sk-ant-abc" and s.app_password == "pw" and s.alert_webhook_url is None
+
+
+def test_connection_error_reports_its_cause(monkeypatch):
+    import httpx2
+    import anthropic as sdk
+    def boom(**kwargs):
+        try:
+            raise ValueError("Illegal header value")
+        except ValueError as cause:
+            raise sdk.APIConnectionError(request=httpx2.Request("POST", "https://api.anthropic.com")) from cause
+    monkeypatch.setattr(loop, "client", lambda: SimpleNamespace(beta=SimpleNamespace(messages=SimpleNamespace(parse=boom))))
+    with pytest.raises(loop.AgentError, match="cause: ValueError: Illegal header value"):
+        loop.ask("hi")
+
+
+def test_health_llm_reports_a_missing_key(api, monkeypatch):
+    from app.settings import settings
+    monkeypatch.setattr(settings, "anthropic_api_key", None)
+    monkeypatch.setattr(settings, "agent_anthropic_api_key", None)
+    monkeypatch.setattr(loop, "_client", None)
+    body = api.get("/health/llm").json()
+    assert body["ok"] is False and "No API key" in body["error"]
