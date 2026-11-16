@@ -23,55 +23,75 @@ from the engine, and the evals check that.
 config:
   flowchart:
     curve: basis
-    nodeSpacing: 30
-    rankSpacing: 50
+    nodeSpacing: 28
+    rankSpacing: 45
 ---
 flowchart LR
-    UI["<b>Chat page</b><br/>static HTML/JS<br/>answer · details · agent steps"]
-
-    subgraph SVC["FastAPI service (one process)"]
+    subgraph OFF["1 · Offline ingestion · laptop, on demand"]
         direction TB
+        APIS["<b>Public APIs</b><br/>Open-Meteo · OpenFEMA"]
+        ING["<b>app/ingest.py</b><br/>fetch · validate<br/>→ new scoring run"]
+        RAW[("<b>raw cache</b><br/>local files or Redis<br/>not in git")]
+        SNAP[("<b>parquet snapshot</b><br/>committed to git")]
+        APIS --> ING
+        ING <--> RAW
+        ING --> SNAP
+    end
+
+    GIT["<b>2 · GitHub main</b><br/>CI runs the tests<br/>Render auto-deploys"]
+
+    subgraph SVC["3 · FastAPI service · Docker on Render (one process)"]
+        direction TB
+        DB[("<b>SQLite</b><br/>restored from the snapshot at startup<br/>scoring runs · conversations · alerts")]
+        ENG["<b>Scoring service</b><br/>active scoring run, cached in memory"]
         CHAT["<b>POST /chat</b>"]
-        AGENT["<b>Agent loop</b><br/>tool use + JSON schemas<br/>guardrails"]
-        TOOLS["<b>5 tools</b><br/>rank · explain · compare<br/>breakdown · weather_stat"]
-        ENG["<b>Scoring service</b><br/>active scoring run<br/>cached in memory"]
-        REST["<b>GET /rankings · /hubs</b><br/>no LLM"]
-        ALERT["<b>Alerts</b><br/>monthly outlook (scheduled)<br/>score change (new run)"]
+        AGENT["<b>Agent loop</b><br/>tool use + JSON schemas · guardrails"]
+        TOOLS["<b>5 tools</b><br/>rank · explain · compare · breakdown · weather_stat"]
+        REST["<b>GET /rankings · /hubs</b> · no LLM"]
+        ALERT["<b>Alerts</b><br/>monthly outlook · score change"]
+        DB --> ENG
         CHAT --> AGENT --> TOOLS --> ENG
         REST --> ENG
         ENG --> ALERT
+        CHAT <-. "history" .-> DB
     end
 
+    UI["<b>Chat page</b><br/>answer · details · agent steps"]
     CLAUDE["<b>Anthropic API</b><br/>Claude Sonnet 5.5"]
-    DB[("<b>SQLite</b><br/>source tables · scoring runs<br/>conversations")]
-    BATCH["<b>Offline ingestion</b><br/>Open-Meteo · OpenFEMA<br/>→ raw cache (Redis / files)<br/>→ parquet snapshot (git)"]
+    HOOK["<b>Webhook</b><br/>Slack-compatible JSON"]
 
+    SNAP -- "git push" --> GIT
+    GIT -- "Docker image<br/>with the snapshot" --> DB
     UI -- "HTTP JSON" --> CHAT
     UI -.-> REST
     AGENT <-- "Messages API" --> CLAUDE
-    ENG <--> DB
-    CHAT <-- "history" --> DB
-    BATCH -- "restore at startup" --> DB
-    HOOK["<b>Webhook</b><br/>Slack-compatible JSON"]
     ALERT -- "POST" --> HOOK
 
     classDef client fill:#f3eefa,stroke:#7d5bb5,color:#271a3b
     classDef api fill:#e8f1fb,stroke:#3b78c3,color:#13263d
     classDef agent fill:#fff4e5,stroke:#d9822b,color:#3d2a12
-    classDef llm fill:#fdecec,stroke:#c0504d,color:#3b1414
+    classDef ext fill:#fdecec,stroke:#c0504d,color:#3b1414
     classDef eng fill:#eaf6ec,stroke:#3c9a52,color:#14301b
+    classDef batch fill:#eef3f3,stroke:#5b8a8a,color:#1d2e2e
     classDef group fill:#fafafa,stroke:#c8c8c8,color:#444
     class UI client
     class CHAT,REST api
-    class AGENT,TOOLS agent
-    class ALERT agent
-    class HOOK llm
-    class CLAUDE llm
-    class ENG,DB,BATCH eng
-    class SVC group
+    class AGENT,TOOLS,ALERT agent
+    class CLAUDE,HOOK,APIS ext
+    class ENG,DB eng
+    class ING,RAW,SNAP,GIT batch
+    class OFF,SVC group
 ```
 
-How one chat question flows through the agent: [section 4](#4-the-agent).
+1. **Offline ingestion** (on a laptop, on demand: monthly or quarterly is enough) downloads from the
+   public APIs, validates, writes the parquet snapshot and creates a scoring run. The raw API
+   responses stay in a local cache (or Redis) so a re-run spends no quota.
+2. **The snapshot is committed**; a push to `main` runs the tests in CI and Render redeploys.
+3. **The service never calls a weather API**: at startup it restores the snapshot into SQLite and
+   scores it once; chat, tools, `/rankings` and alerts read the active scoring run.
+
+How one chat question flows through the agent: [section 4](#4-the-agent). When and why ingestion
+runs: [section 7](#7-data-and-ingestion).
 
 ---
 
@@ -199,6 +219,9 @@ clicks. Render builds the image from GitHub and redeploys on every push to `main
 - **No persistent disk on the free plan**: on every restart or deploy the database is rebuilt from
   the snapshot in the image and scored again (~1 s). Chat history, trajectories and alerts start
   empty; the scores and data are always the same. A persistent disk (paid) or Postgres would keep them.
+- **Score-change alerts need a persistent database.** Without a disk, production starts each deploy
+  with an empty database, so there is no previous scoring run to compare with; the change alert
+  then appears where the database persists (the laptop that ran ingestion prints the moved scores).
 - **One instance, one worker**: the score cache and the alert loop run in the process; the design is
   safe with several instances (`docs/DESIGN_DECISIONS.md` section 21), but one is enough here.
 - **Cost control**: set a monthly spend limit on the API key's workspace in the Anthropic Console;
@@ -411,7 +434,20 @@ Results so far (details and what changed after each run in `docs/EVALS.md`):
 | [OpenFEMA Disaster Declarations](https://www.fema.gov/openfema-data-page/disaster-declarations-summaries-v2) | hurricanes, severe storms per county | 47 counties, 669 rows = 481 distinct disasters (2006-2026) |
 | `config/hubs.yaml` | the 50 hubs: coordinates, county FIPS, Census region | |
 
-The data is downloaded once by an offline command, never by the web service:
+**When to run ingestion:** the first build of the dataset; a data refresh (a new year of weather,
+new FEMA declarations: monthly or quarterly is plenty, the KPI is a 5-year average); a hub added to
+`config/hubs.yaml` (`--hubs new_id`); a longer history or a new variable; a change in the cleaning
+logic (re-run from the local cache, no API calls). **Never** at server startup, per question, or on Render.
+
+**Why it is separate from the app:** the APIs are slow, rate-limited and sometimes unreachable (the
+Open-Meteo free quota ran out during this project); historical data barely changes; questions are
+answered in milliseconds from local data; evals run on identical data every time; and a refresh
+becomes a new scoring run that can be compared with the previous one (and alerted on).
+
+**A refresh reaching production:** ingest on the laptop -> commit the snapshot -> push -> CI runs
+the tests -> Render rebuilds the image -> the app scores the new data at startup.
+
+The data is downloaded by an offline command, never by the web service:
 
 ```
 uv run python -m app.ingest --status
