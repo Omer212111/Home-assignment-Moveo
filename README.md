@@ -16,6 +16,9 @@ In which month is Denver most disrupted? Compare Boston and Minneapolis by seaso
 The LLM never produces a number: it chooses tools and writes the explanation. Every number comes
 from the engine, and the evals check that.
 
+**Live demo:** https://hub-weather-risk.onrender.com/ (password protected; free hosting plan, so the first
+request after 15 idle minutes takes about a minute to wake the service).
+
 ## Architecture at a glance
 
 ```mermaid
