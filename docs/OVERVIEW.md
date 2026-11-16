@@ -32,7 +32,8 @@ comes from a tool result.
 
 ## What was built
 
-- **Agent:** a hand-written tool-use loop. Tool inputs and the final answer follow strict JSON
+- **Agent:** a hand-written tool-use loop, without an agent framework. The loop is simple, and a
+  framework would have added dependency problems and setup time. Tool inputs and the final answer follow strict JSON
   schemas, validated with Pydantic. The final answer includes the assumptions made, a confidence
   level and notes on uncertainty. Guardrails limit the loop to at most 2 rounds of tool calls.
 - **API and chat page:** FastAPI serves `POST /chat` for the agent and `/rankings` and `/hubs`
@@ -65,8 +66,6 @@ comes from a tool result.
   storms.
 - The model measures **exposure**, not vulnerability or cost. It does not know a hub's building
   standard or backup power.
-
-Each answer states the assumptions and uncertainty that apply to it.
 
 ## How it was built
 
