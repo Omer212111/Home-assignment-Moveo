@@ -4,5 +4,8 @@ __pycache__/
 .env
 # The SQLite file is rebuilt from data/snapshot/ - the snapshot and raw responses are committed.
 data/*.db
+# Raw API responses: ingestion's local cache and evidence, not needed to run the app (the
+# snapshot is the source of truth). Kept out of git since 2026-11-16; see docs/DESIGN_DECISIONS.md section 22.
+data/raw/
 # Agent trajectories of chat questions (local debugging; eval trajectories live in evals/)
 data/trajectories/

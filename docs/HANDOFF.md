@@ -51,7 +51,7 @@ Work started around 13:30 UTC on 2026-11-15; about 4 hours used so far.
 | API | `app/main.py` | `GET /` (UI), `/health`, `/rankings`, `/hubs/{id}`, `POST /chat` |
 | Agent | `app/agent/{schemas,tools,prompts,loop}.py` | `claude-sonnet-5-5`, effort low, refusal fallbacks; hand-written tool loop; tools `rank_hubs`, `explain_hub`, `compare_hubs` (slice 3, `DESIGN_DECISIONS.md` section 11); `ModelAnswer` = LLM output schema (no ranking), `AgentAnswer` = API response (server attaches the ranking from the engine); per-question cache for identical tool calls; tool schemas via `anthropic.transform_schema` (strict mode rejects min/max) |
 | UI | `app/static/index.html` | single page, no libraries, chat + details panel |
-| Raw cache | `app/sources/http_cache.py` | Redis when `REDIS_URL` is set (`import-files`, `status`), else `data/raw/` files (`DESIGN_DECISIONS.md` section 16) |
+| Raw cache | `app/sources/http_cache.py` | Redis when `REDIS_URL` is set (`import-files`, `status`), else local `data/raw/` files, git-ignored since section 22 (`DESIGN_DECISIONS.md` sections 16, 22) |
 | Scores | `app/scoring/store.py` | SQLite scoring tables, one set per scoring run; memory caches the active run (`DESIGN_DECISIONS.md` section 17) |
 | Index | `config/disruption.yaml` `index` | 100 = median hub (4.85 days, fixed); tiers low..very high; per month/season pro-rated, `monthly_scores` table (`DESIGN_DECISIONS.md` section 18) |
 | Write path | `app/ingest.py::score_after_ingest` | ingestion creates the scoring run (`DESIGN_DECISIONS.md` section 19) |

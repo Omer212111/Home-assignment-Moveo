@@ -9,10 +9,10 @@ Two backends with the same behaviour:
 - Redis, when REDIS_URL is set (e.g. redis://localhost:6379/0). One key per response:
   httpcache:<source>:<hash>, value = JSON envelope {url, params, fetched_at, data}. No expiry.
   Shared by every machine that points at the same Redis.
-- Files in data/raw/<source>/<hash>.json otherwise (the default; committed to git, so a fresh
-  clone works with no server).
+- Files in data/raw/<source>/<hash>.json otherwise (the default; local, git-ignored: the app
+  itself never reads this cache, only ingestion does).
 
-Move the committed files into Redis once with:
+Copy a local file cache into Redis once with:
     uv run python -m app.sources.http_cache import-files
 """
 import hashlib

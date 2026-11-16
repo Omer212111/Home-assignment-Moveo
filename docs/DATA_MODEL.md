@@ -17,7 +17,7 @@ flowchart LR
     subgraph L1["1 · Inputs"]
         direction TB
         Y["<b>config/hubs.yaml</b><br/>50 hubs"]
-        HC["<b>HTTPCACHE</b><br/>Redis or data/raw/ files<br/>97 API responses<br/><i>original data, audit trail</i>"]
+        HC["<b>HTTPCACHE</b><br/>Redis or local data/raw/ files<br/>97 API responses<br/><i>ingestion cache, audit trail</i>"]
         RY["<b>config/disruption.yaml</b><br/><i>scoring rules</i>"]
     end
 
@@ -71,7 +71,7 @@ flowchart LR
 
 | Table | Layer | Purpose | Written by | Read by |
 |---|---|---|---|---|
-| `HTTPCACHE` | Redis (`REDIS_URL`) or `data/raw/*.json` (git) | Original API responses, never expire: audit trail and quota protection | ingestion | ingestion only |
+| `HTTPCACHE` | Redis (`REDIS_URL`) or local `data/raw/*.json` (not in git) | Original API responses, never expire: audit trail and quota protection | ingestion | ingestion only |
 | `HUBS` | SQLite + parquet snapshot | The 50 hubs: location, county, Census region; the table everything joins to | ingestion (from `config/hubs.yaml`) | engine, API |
 | `DAILY_WEATHER` | SQLite + parquet snapshot | One row per hub per day, 2021-2025 | ingestion (Open-Meteo) | engine, `weather_stat` |
 | `DISASTER_DECLARATIONS` | SQLite + parquet snapshot | FEMA disasters per county since 2006: the rare events 5 years of weather cannot show | ingestion (OpenFEMA) | engine |

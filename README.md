@@ -424,13 +424,14 @@ failed ingestion) and prints which hub scores moved; a running server serves it 
 The weather download needs a machine with Open-Meteo quota (the free tier is limited).
 
 **Raw API cache.** Every API response is cached, so re-running ingestion makes no API calls:
-files in `data/raw/` by default, or **Redis** when `REDIS_URL` is set. To use Redis (Docker):
+local files in `data/raw/` by default (git-ignored: the app never needs them, only ingestion
+does, so a fresh clone runs without them), or **Redis** when `REDIS_URL` is set. To use Redis (Docker):
 
 ```
 docker run -d --name redis -p 6379:6379 -v redis-data:/data redis:7 redis-server --appendonly yes
 ```
 
-Add `REDIS_URL=redis://localhost:6379/0` to `.env`, then copy the committed responses into Redis
+Add `REDIS_URL=redis://localhost:6379/0` to `.env`, then copy a local file cache (if you have one) into Redis
 once and check:
 
 ```
@@ -461,7 +462,7 @@ More diagrams: `docs/ARCHITECTURE.md`, `docs/DATA_MODEL.md`. PNG/SVG export of t
 
 | Layer | Technology | Contents | Why |
 |---|---|---|---|
-| Raw API cache | **Redis** (`REDIS_URL`) or JSON files in `data/raw/` | Original API responses, never expire | Protects the Open-Meteo quota; audit trail ("where did this number come from?"); Redis shares one cache across machines, files work with no server |
+| Raw API cache | **Redis** (`REDIS_URL`) or local JSON files in `data/raw/` (not in git) | Original API responses, never expire | Protects the Open-Meteo quota; audit trail ("where did this number come from?"); Redis shares one cache across machines, files work with no server |
 | Snapshot | Parquet in `data/snapshot/` (828 KB, in git) | Cleaned tables: hubs, daily weather, declarations, ingest log | Reproducible: any clone has exactly the data behind the numbers |
 | Database | **SQLite** (`data/weather_risk.db`, rebuilt at startup) | The same tables + chat conversations | Small relational data, SQL for checks, no server to run; one container needs no more |
 | Scores | **SQLite scoring tables**, one set per scoring run (`rule_sets`, `scoring_runs`, `hub_results`, `hazard_scores`, `disruption_days`); the active run cached in memory | KPI per hub and hazard, drivers, every disruption day | Every score traceable to the exact rules and data; runs can be compared (risk-change alerts); a new run reaches the running server without a restart |
@@ -505,7 +506,7 @@ config/
   alerts.yaml           alert policy (thresholds, lead time)
 data/
   snapshot/             parquet snapshot (in git)
-  raw/                  raw API responses (in git)
+  raw/                  raw API responses (local cache for ingestion, git-ignored)
 evals/                  cases.yaml, checks.py, run.py, report.json, trajectories/
 tests/                  offline tests
 docs/                   design documents (section 13)

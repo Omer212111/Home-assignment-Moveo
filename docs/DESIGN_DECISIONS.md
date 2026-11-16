@@ -357,7 +357,7 @@ When `REDIS_URL` is set, every public-API response is stored in Redis under
 
 Why this shape:
 - **Same keys in both backends**, so `uv run python -m app.sources.http_cache import-files` moves the
-  97 committed responses into Redis and ingestion makes no API calls (verified against a real Redis:
+  97 cached responses into Redis and ingestion makes no API calls (verified against a real Redis:
   97 imported, full ingest with the HTTP client disabled, identical snapshot tables).
 - **No expiry** (`TTL -1`): historical weather and declarations do not change. Redis must run with
   persistence (`--appendonly yes`), otherwise a restart empties the cache and the next ingest
@@ -538,3 +538,20 @@ reply is lost; the alert is then re-sent after the lease. Every POST carries the
 same patterns move to Postgres unchanged in spirit: `INSERT ... ON CONFLICT DO NOTHING` for
 creation, `SELECT ... FOR UPDATE SKIP LOCKED` for claiming outbox rows, and a transaction-level
 advisory lock (or the same re-check) around activating a scoring run.
+
+---
+
+## 22. The raw API cache is not in git
+
+**Decision (user's choice): `data/raw/` was removed from the repository and is now git-ignored.**
+
+Checked before deciding: the requests ask only for the fields we use, so the raw responses hold
+almost the same information as the snapshot (FEMA: 8 fields vs 7 kept; Open-Meteo: the same 9
+daily variables). Running the app needs only the snapshot; the Docker image already excluded
+`data/raw`.
+
+What the raw cache still does, now locally (files) or in Redis: resumes an interrupted download
+without spending quota, lets the cleaning step be re-run without API calls, and is the evidence of
+what the APIs returned. Consequence of the removal: on a fresh clone, re-running ingestion calls the
+APIs again (Open-Meteo quota needed); running the app, tests, evals and deployment are unaffected.
+The old files remain in the git history (any commit before the removal).
