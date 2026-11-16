@@ -18,6 +18,7 @@ from the engine, and the evals check that.
 
 **Live demo:** https://hub-weather-risk.onrender.com/ (password protected; free hosting plan, so the first
 request after 15 idle minutes takes about a minute to wake the service).
+**One-page design summary:** [docs/DESIGN_SUMMARY.pdf](docs/DESIGN_SUMMARY.pdf).
 
 ## Architecture at a glance
 
@@ -569,6 +570,7 @@ dollars, tail risk, FEMA National Risk Index, uncertainty ranges) are in `docs/I
 
 | Document | Contents |
 |---|---|
+| `docs/DESIGN_SUMMARY.pdf` | **One-page design and architecture summary**: run instructions, architecture, agent loop, scoring, storage, alerts, repository structure |
 | `docs/ARCHITECTURE.md` | Component diagram, chat sequence, component table |
 | `docs/DATA_MODEL.md` | Diagram of every table (source tables, scoring runs, alerts) and how they connect |
 | `docs/DATA_MODEL_SCALABLE.md` | Target data model for scale: Postgres, versioned rules and scoring runs, incremental pipeline, migration path |
