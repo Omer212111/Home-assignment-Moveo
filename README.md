@@ -314,6 +314,10 @@ time without a real benefit, and writing it by hand keeps every step visible and
 **Guardrails** (from the eval history):
 - At most **two rounds of tool calls** per question; a round in which a tool failed does not count,
   so the model can correct its arguments. After that, `tool_choice: none` forces the answer.
+  **Why this limit:** it was set to save tokens and budget, because the project ran on my personal
+  API usage. It also blocks longer multi-step plans (for example, a question that needs several
+  tools one after another). To support those, the limit has to be removed or raised:
+  `MAX_TOOL_ROUNDS` in `app/agent/loop.py`, together with `MAX_STEPS` (6 model calls in total).
 - A round of only repeated identical calls forces the answer; repeated calls are served from a cache.
 - At most 6 model calls per question; refusals use server-side fallback models.
 
