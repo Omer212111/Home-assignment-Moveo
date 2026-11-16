@@ -595,7 +595,8 @@ sessions: the plan, every prompt, the agent's reasoning, tool calls and code cha
 | # | Session |
 |---|---|
 | 1 | https://claude.ai/code/cshk_011hVRPbfb61h2dKkLurXcKo2F25mKZuBMUTmrVTZEwg3i |
-| 2 | https://claude.ai/code/cshk_011hVRPayq9yfkbEahWCPf9x8UKxB25B9dFPWhyYCcuVx4 |
+| 2 | https://claude.ai/code/cshk_011hVRPXx3vNe9qer48mkcpEHguAQxNdqY9GM5TVaTUcdr |
+| 3 | https://claude.ai/code/cshk_011hVRPayq9yfkbEahWCPf9x8UKxB25B9dFPWhyYCcuVx4 |
 
 The plan written at the start of the work is also in the repository: `docs/PLAN.md` (the original
 plan) and `docs/PLAN-v2-slices.md` (the build split into slices). `docs/HANDOFF.md` is the summary
