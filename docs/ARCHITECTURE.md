@@ -17,31 +17,47 @@ config:
 ---
 flowchart LR
 
-    subgraph SVC["FastAPI service · one container, one process"]
-        direction TB
-        DB[("<b>SQLite</b> (WAL)<br/>source tables · scoring runs<br/>conversations · alerts")]
-        ENG["<b>Scoring service</b><br/>active scoring run, cached in memory"]
+    UI["<b>Chat page</b><br/>browser, static HTML/JS"]
+    SNAP[("<b>Parquet snapshot</b><br/>weather + FEMA data<br/>baked into the image")]
+    CLAUDE["<b>Anthropic API</b><br/>Claude Sonnet 5.5"]
+    HOOK["<b>Webhook</b><br/>Slack-compatible"]
+
+    subgraph SVC["FastAPI service · Docker on Render · one process"]
+        direction LR
         CHAT["<b>POST /chat</b>"]
-        AGENT["<b>Agent loop</b><br/>strict tool schemas · ModelAnswer<br/>guardrails · trajectories"]
-        TOOLS["<b>5 tools</b><br/>rank · explain · compare · breakdown · weather_stat"]
-        REST["<b>GET /rankings · /hubs · /health</b><br/>no LLM"]
-        ALERT["<b>Alerts</b><br/>monthly outlook · score change<br/>outbox delivery"]
-        DB --> ENG
-        CHAT --> AGENT --> TOOLS --> ENG
+        REST["<b>GET /rankings · /hubs/{id}</b><br/>no LLM"]
+
+        subgraph LOOP["Agent loop · max 6 model calls"]
+            direction TB
+            CALL["<b>Call Claude</b><br/>question + history<br/>+ 5 tool schemas"]
+            DECIDE{"Claude's reply"}
+            RUN["<b>Run requested tools</b><br/>validate args (Pydantic)"]
+            FINAL["<b>Validate final answer</b><br/>ModelAnswer JSON"]
+            CALL --> DECIDE
+            DECIDE -- "tool_use" --> RUN
+            RUN -- "tool_result<br/>(≤ 2 tool rounds)" --> CALL
+            DECIDE -- "final answer" --> FINAL
+        end
+
+        TOOLS["<b>5 tools</b><br/>rank_hubs · explain_hub · compare_hubs<br/>hub_breakdown · weather_stat"]
+        ENG["<b>Scoring service</b><br/>disruption scores per hub<br/>cached in memory"]
+        DB[("<b>SQLite</b><br/>weather data · scoring runs<br/>conversations · alerts")]
+        ALERT["<b>Alerts job</b><br/>every 60 s: monthly outlook<br/>· score change"]
+
+        CHAT -- "question + last 6 turns" --> CALL
+        FINAL -- "answer" --> CHAT
+        CHAT <-. "read history / save turn" .-> DB
+        RUN --> TOOLS --> ENG
         REST --> ENG
+        DB -- "active scoring run" --> ENG
         ENG --> ALERT
         ALERT <--> DB
-        CHAT <-. "history" .-> DB
     end
 
-    UI["<b>Chat page</b><br/>static HTML/JS<br/>answer · details · agent steps · alerts"]
-    CLAUDE["<b>Anthropic API</b><br/>Claude Sonnet 5.5"]
-    HOOK["<b>Webhook</b><br/>Slack-compatible JSON"]
-    EVAL["<b>Eval runner</b><br/>24 cases · history"]
-
-    UI -- "HTTP JSON" --> CHAT
-    EVAL -- "same agent loop" --> AGENT
-    AGENT <-- "Messages API" --> CLAUDE
+    UI -- "question {message, session_id}" --> CHAT
+    CHAT -- "answer + tool calls + agent steps" --> UI
+    CALL <-- "Messages API" --> CLAUDE
+    SNAP -- "loaded at startup" --> DB
     ALERT -- "POST" --> HOOK
 
     classDef client fill:#f3eefa,stroke:#7d5bb5,color:#271a3b
@@ -49,15 +65,22 @@ flowchart LR
     classDef agent fill:#fff4e5,stroke:#d9822b,color:#3d2a12
     classDef ext fill:#fdecec,stroke:#c0504d,color:#3b1414
     classDef eng fill:#eaf6ec,stroke:#3c9a52,color:#14301b
-    classDef batch fill:#eef3f3,stroke:#5b8a8a,color:#1d2e2e
     classDef group fill:#fafafa,stroke:#c8c8c8,color:#444
-    class UI,EVAL client
+    classDef loop fill:#fffaf2,stroke:#d9822b,stroke-dasharray:4 3,color:#3d2a12
+    class UI client
     class CHAT,REST api
-    class AGENT,TOOLS,ALERT agent
+    class CALL,DECIDE,RUN,FINAL,TOOLS,ALERT agent
     class CLAUDE,HOOK ext
-    class ENG,DB eng
+    class ENG,DB,SNAP eng
     class SVC group
+    class LOOP loop
 ```
+
+**How to read it.** The browser sends a question to `POST /chat`. The agent loop asks Claude what to
+do; when Claude asks for a tool, the loop runs it against the scoring service and sends the result
+back, until Claude writes the final answer (at most 2 tool rounds). Every number comes from the
+scoring service, never from the LLM. `GET /rankings` and `/hubs/{id}` read the same scores directly,
+without the LLM. A background job sends alerts to a webhook.
 
 **Main design choice: no weather API at runtime.** The service never calls a weather API to answer
 a question. It starts from the committed parquet snapshot, so the demo works when a public API is
