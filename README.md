@@ -101,10 +101,23 @@ flowchart LR
 
 ## 1. Run it
 
-Requirements: an Anthropic API key (only the chat and the evals use it). The weather and disaster
-data are in the repository (`data/snapshot/`), so nothing is downloaded at startup.
+### Option A: deployed to a URL
 
-### Option A: locally with uv (development)
+The live demo is at https://hub-weather-risk.onrender.com/. The browser asks for a login:
+
+| Field | Value |
+|---|---|
+| User name | any value (for example `demo`); only the password is checked |
+| Password | `Omer2106!` |
+
+`/health` is open without a password. Nothing to install and no API key needed. To deploy your own
+copy, see [section 1a](#1a-deploy-to-a-url-render).
+
+### Option B: locally with uv (development)
+
+Requirements for running it yourself (options B and C): an Anthropic API key (only the chat and the
+evals use it). The weather and disaster data are in the repository (`data/snapshot/`), so nothing is
+downloaded at startup.
 
 Install [uv](https://docs.astral.sh/uv/getting-started/installation/) (it installs Python 3.12+ if
 needed), clone the repository, and in its folder:
@@ -146,7 +159,7 @@ uv run uvicorn app.main:app --reload
 uv run pytest -q
 ```
 
-### Option B: with Docker (the same image as the deployment)
+### Option C: with Docker (the same image as the deployment)
 
 ```
 docker build -t hub-weather-risk .
@@ -158,17 +171,6 @@ docker run -p 8000:8000 --env-file .env hub-weather-risk
 
 Then open http://127.0.0.1:8000/. The image contains the app, the rules and the data snapshot; it
 runs as a non-root user with a health check on `/health`.
-
-### Option C: deployed to a URL
-
-The live demo is at https://hub-weather-risk.onrender.com/. The browser asks for a login:
-
-| Field | Value |
-|---|---|
-| User name | any value (for example `demo`); only the password is checked |
-| Password | `Omer2106!` |
-
-`/health` is open without a password. To deploy your own copy, see [section 1a](#1a-deploy-to-a-url-render).
 
 ### Refreshing the data (ingestion)
 
