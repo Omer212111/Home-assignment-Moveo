@@ -23,54 +23,7 @@ request after 15 idle minutes takes about a minute to wake the service).
 
 ## Architecture at a glance
 
-```mermaid
----
-config:
-  flowchart:
-    curve: basis
-    nodeSpacing: 28
-    rankSpacing: 45
----
-flowchart LR
-
-    subgraph SVC["FastAPI service · Docker on Render (one process)"]
-        direction TB
-        DB[("<b>SQLite</b><br/>restored from the snapshot at startup<br/>scoring runs · conversations · alerts")]
-        ENG["<b>Scoring service</b><br/>active scoring run, cached in memory"]
-        CHAT["<b>POST /chat</b>"]
-        AGENT["<b>Agent loop</b><br/>tool use + JSON schemas · guardrails"]
-        TOOLS["<b>5 tools</b><br/>rank · explain · compare · breakdown · weather_stat"]
-        REST["<b>GET /rankings · /hubs</b> · no LLM"]
-        ALERT["<b>Alerts</b><br/>monthly outlook · score change"]
-        DB --> ENG
-        CHAT --> AGENT --> TOOLS --> ENG
-        REST --> ENG
-        ENG --> ALERT
-        CHAT <-. "history" .-> DB
-    end
-
-    UI["<b>Chat page</b><br/>answer · details · agent steps"]
-    CLAUDE["<b>Anthropic API</b><br/>Claude Sonnet 5.5"]
-    HOOK["<b>Webhook</b><br/>Slack-compatible JSON"]
-
-    UI -- "HTTP JSON" --> CHAT
-    AGENT <-- "Messages API" --> CLAUDE
-    ALERT -- "POST" --> HOOK
-
-    classDef client fill:#f3eefa,stroke:#7d5bb5,color:#271a3b
-    classDef api fill:#e8f1fb,stroke:#3b78c3,color:#13263d
-    classDef agent fill:#fff4e5,stroke:#d9822b,color:#3d2a12
-    classDef ext fill:#fdecec,stroke:#c0504d,color:#3b1414
-    classDef eng fill:#eaf6ec,stroke:#3c9a52,color:#14301b
-    classDef batch fill:#eef3f3,stroke:#5b8a8a,color:#1d2e2e
-    classDef group fill:#fafafa,stroke:#c8c8c8,color:#444
-    class UI client
-    class CHAT,REST api
-    class AGENT,TOOLS,ALERT agent
-    class CLAUDE,HOOK ext
-    class ENG,DB eng
-    class SVC group
-```
+![System architecture](docs/img/architecture-1.svg)
 
 - **One process** serves the chat page, the API, the agent and the alerts. The chat page talks to
   `POST /chat` (and `GET /alerts`); `GET /rankings` and `/hubs` are the deterministic, no-LLM API for
@@ -474,8 +427,8 @@ The component diagram is at the top of this page ([Architecture at a glance](#ar
   scores come from the active scoring run, so the demo works when a public API is down, answers are
   fast, and evals are repeatable. Refreshing the data is a setup step ([section 1](#refreshing-the-data-ingestion)).
 
-More diagrams: `docs/ARCHITECTURE.md`, `docs/DATA_MODEL.md`. PNG/SVG export of the diagram above:
-`docs/img/architecture-agent-1`.
+More diagrams: `docs/ARCHITECTURE.md`, `docs/DATA_MODEL.md`. The diagram above is
+`docs/img/architecture-1.svg`.
 
 ---
 
