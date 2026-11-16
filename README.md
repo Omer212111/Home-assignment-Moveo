@@ -293,16 +293,12 @@ eval cost.
 | `GET /` | - | The chat page |
 | `GET /health` | no | Status, number of hubs scored, active scoring run and data date (no password needed) |
 | `GET /health/llm` | no | Checks the API key and the connection to Anthropic without spending tokens |
-| `GET /rankings?hazard=&region=&top_n=&season=&order=` | no | Deterministic ranking, e.g. `?season=summer` or `?order=least` |
 | `GET /hubs/{hub_id}` | no | Full breakdown of one hub: hazards, drivers, counted FEMA disasters |
 | `GET /alerts` | no | Recent alerts (monthly outlooks, score changes) with delivery status |
 | `POST /alerts/check` | no | Webhook-triggered outlook check (idempotent); header `X-Alerts-Token` if `ALERTS_TOKEN` is set |
 | `POST /chat` | yes | `{"message": "...", "session_id": null}` -> answer, ranking, tool calls, trajectory, tokens |
 
-Example:
 
-```
-curl "http://127.0.0.1:8000/rankings?hazard=winter&region=Midwest&top_n=3"
 ```
 
 ---
