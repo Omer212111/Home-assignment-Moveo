@@ -444,6 +444,10 @@ More diagrams: `docs/ARCHITECTURE.md`, `docs/DATA_MODEL.md`. The diagram above i
 **Why this setup.** Some of these choices were made so the assignment could be finished by the
 deadline and the deployment would be safer:
 
+- **API request limits.** The free Open-Meteo API limits how many requests can be made (it counts a
+  long request as several calls), and the quota ran out during this project. So the data is
+  downloaded once by the offline ingestion and committed as a snapshot; the app, the tests and the
+  evals never spend quota.
 - **Deadline.** SQLite and a parquet snapshot in git need no database server to set up, migrate or
   pay for. The time went into the scoring engine, the agent and the evals instead of infrastructure.
 - **Safer deployment.** The service calls no weather API at runtime and connects to no external

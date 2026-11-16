@@ -46,9 +46,10 @@ comes from a tool result.
 
 ## Key design choices
 
-- **No weather API at runtime.** The service starts from a data snapshot committed to the
-  repository, so answers are fast and reproducible and the demo keeps working when a public API is
-  down.
+- **A data snapshot instead of live API calls.** The free weather API limits the number of
+  requests, and the quota ran out during the project. So the data is downloaded once and committed
+  to the repository; the service starts from that snapshot. Answers are fast and reproducible, and
+  the demo keeps working when a public API is down or out of quota.
 - **SQLite instead of a database server.** This choice was made partly to finish within the 24-hour
   deadline and to keep the deployment simple and safe.
 - **Narrow scope, done well.** The work concentrates on clear, explainable scores rather than broad
