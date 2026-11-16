@@ -4,7 +4,7 @@
 | Source | Coverage | Rows |
 |---|---|---|
 | Open-Meteo historical (ERA5 reanalysis), daily | 50 hubs, 2021-01-01 .. 2025-12-31 | 91,300 (1,826 days per hub) |
-| OpenFEMA Disaster Declarations | 47 counties (50 hubs), 2006 .. 2026-10 | 669 disasters |
+| OpenFEMA Disaster Declarations | 47 counties (50 hubs), 2006 .. 2026-10 | 669 rows (481 distinct disasters; one row per disaster and county) |
 
 ## Quality checks (all passed)
 - No missing values in any weather variable; every hub has all 1,826 days.

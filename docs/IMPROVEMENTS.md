@@ -1,7 +1,9 @@
-# Improvements after the baseline pipeline
+# Improvements: what could come next
 
-To do once the baseline works end to end (data -> disruption days -> API -> agent -> UI -> evals).
-Ordered roughly by value for the investment decision.
+The baseline and its extensions are built (README section 12). This list is what would come next,
+ordered roughly by value for the investment decision. Status as of 2026-11-16: sections 1-7 and 9
+are open; section 8 is done except D; built since the list was written: standardised index and
+tiers, scoring runs, alerts, time breakdowns, deployment (see `docs/DESIGN_DECISIONS.md` 14-22).
 
 ## 1. A cost metric instead of days only (research task)
 The baseline KPI is expected disruption days per year. An investment committee thinks in money,
@@ -30,6 +32,8 @@ Severities, recovery days and the 7 days per hurricane are expert judgment. With
 
 ## 5. Uncertainty ranges
 Run each hub with low / base / high parameter sets and report a range (e.g. "Minneapolis 9-14 days/yr"), and flag hubs whose rank changes between scenarios.
+Cheaper first step with the data we have: leave one year out at a time (5 runs) and report the range
+and whether the hub's rank and tier are stable. The scoring runs make the comparison a single command.
 
 ## 6. Longer and better weather history
 - 10-20 years instead of 5 (needs a paid Open-Meteo key or several days of free quota) to reduce sampling noise.
@@ -51,13 +55,17 @@ tokens, ~2 s). It also exposed a user-visible bug. Proposed fixes, in priority o
 | D | **Smaller tool result for long rankings:** full detail for rows 1-10, only rank/city/days for rows 11-50 (the server keeps the full result for the UI). | `impossible_n` is the most expensive case (~29k input tokens); the 50 detailed rows are re-sent on every later model call. |
 | E | **Prompt caching** on system prompt, tools and history. | Makes any extra round trip, and every follow-up, much cheaper. |
 
-Status after eval run 6: **A done**, **E done**, C replaced by the tool-round limit (`DESIGN_DECISIONS.md` section 15); B and D still open.
+Status: **A done**, **E done** (run 7: cost halved), **B done** after run 8 (any matching call;
+ranking vs the expected arguments; efficiency checks), C replaced by the tool-round limit
+(`DESIGN_DECISIONS.md` section 15). **D open.** The tool-round question was settled with the user:
+at most two tool rounds plus a retry after an error, not one round, so chained questions still work.
 
-Deliberately not done yet: forbidding tools after the first tool round (`tool_choice: none`). It is
-the only hard stop for extra round trips, but it would block chained questions such as "why is the
-riskiest hub so high?" (rank, then explain). Revisit once the slice-3 tools exist.
+## 9. Live alerts and voice (bonus items not built)
+- Live NWS alerts (`api.weather.gov`, reachable) for "a storm is coming this week", next to the
+  historical monthly outlook; short-lived data, a natural use of Redis with a TTL.
+- Voice input in the page with the browser's Web Speech API (no server change).
 
-## 9. Smaller items
+## 10. Smaller items
 - Group neighbouring hubs into metros (Dallas / Fort Worth / Arlington, the Bay Area, Phoenix / Mesa, LA / Long Beach).
 - Statewide FEMA declarations (county code 000) are ignored today; decide whether to include them.
 - Exposure is not risk: add hub vulnerability (building standard, backup power, alternative routes) when the company can provide it.

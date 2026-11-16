@@ -1,10 +1,29 @@
-# Design decisions: API and agent layer
+# Design decisions
 
-For each file in the API and agent layer: what it does, the decision it involved, and why it
-was made that way. Decisions about data and scoring are in `docs/PLAN.md`, `docs/DATA_NOTES.md`
-and the comments in `config/disruption.yaml`.
+Every design decision, with the options considered and the reason for the choice, in the order
+they were made. Later sections sometimes replace earlier ones; the table says which. Data quality
+and calibration are in `docs/DATA_NOTES.md`; the rules themselves are commented in
+`config/disruption.yaml`.
 
-Files are listed in the order a request passes through them.
+| # | Topic | Status |
+|---|---|---|
+| 1-4 | JSON contracts, tools, prompt, agent loop | current; section 2's "one tool" grew to five (11, 14) |
+| 5 | Scores kept in memory | **superseded by 17** (scores in tables, memory as a cache) |
+| 6-8 | FastAPI service, small changes, testing without the LLM | current |
+| 9 | Changes after eval run 1 (server attaches the ranking) | current |
+| 10 | Chat UI | current (desktop only, by the user's choice) |
+| 11 | `explain_hub` and `compare_hubs` | current |
+| 12 | Agent trajectories | current |
+| 13 | Guardrail against repeated calls | current, extended by 15 |
+| 14 | Time dimension: months, seasons, years, raw weather | current |
+| 15 | Two tool rounds, prompt caching, ranking attach | current |
+| 16 | Raw API cache in Redis | current (backend option); see 22 |
+| 17 | Scores in tables, versioned by scoring run | current |
+| 18 | Standardised index and tiers (also per month) | current |
+| 19 | When results are computed (on write) | current |
+| 20 | Alerts: monthly outlook and score change | current |
+| 21 | Concurrency: races and fixes | current |
+| 22 | Raw API cache not in git | current |
 
 ---
 
@@ -40,6 +59,7 @@ Return an error to the model (`is_error`) with the details, rather than crashing
 
 **Decision 4: one general tool or several specific ones?**
 For now there is one, because the slice is "most dangerous hubs". The `TOOLS` registry is built so `compare_hubs`, `explain_hub` and `weather_stat` can be added in later slices without changing the loop.
+*Later:* five tools, each named after a question type (sections 11 and 14); the loop did not change.
 
 ---
 

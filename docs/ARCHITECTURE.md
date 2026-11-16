@@ -1,7 +1,9 @@
 # System architecture
 
-Legend: **solid boxes** are built, **dashed boxes** are planned (later slices).
-GitHub renders the diagrams below; PNG/SVG exports are in `docs/img/` (for slides).
+Everything below is built and running (live: https://hub-weather-risk.onrender.com/, password protected).
+GitHub renders the diagrams; PNG/SVG exports are in `docs/img/` (`architecture-1`, `architecture-2`,
+`architecture-3`). A one-page summary is in `docs/DESIGN_SUMMARY.pdf`; the reasons behind every choice
+are in `docs/DESIGN_DECISIONS.md`.
 
 ## 1. Components and how they talk to each other
 
@@ -9,112 +11,155 @@ GitHub renders the diagrams below; PNG/SVG exports are in `docs/img/` (for slide
 ---
 config:
   flowchart:
-    subGraphTitleMargin: {top: 6, bottom: 30}
-    wrappingWidth: 400
+    curve: basis
+    nodeSpacing: 28
+    rankSpacing: 45
 ---
-flowchart TB
-    subgraph SRC["Layer 1 - Public APIs"]
-        direction LR
-        OM["Open-Meteo<br/>historical weather (daily)"]
-        FEMA["OpenFEMA<br/>disaster declarations"]
-        NWS["NWS<br/>live alerts + forecast"]:::planned
+flowchart LR
+    subgraph OFF["Offline ingestion · laptop, on demand"]
+        direction TB
+        APIS["<b>Public APIs</b><br/>Open-Meteo · OpenFEMA"]
+        ING["<b>app/ingest.py</b><br/>fetch · validate (Pydantic)<br/>→ new scoring run"]
+        SNAP[("<b>parquet snapshot</b><br/>committed to git")]
+        APIS --> ING --> SNAP
     end
 
-    subgraph BATCH["Layer 2 - Ingestion (offline CLI)"]
-        direction LR
-        CFG["config/hubs.yaml<br/>50 hubs"] --> ING["app/ingest.py<br/>fetch + validate<br/>(Pydantic)"]
-        ING <--> RAW[("data/raw/*.json<br/>raw HTTP cache")]
-        ING -- export --> SNAP[("data/snapshot/<br/>*.parquet (git)")]
+    GIT["<b>GitHub main</b><br/>CI: offline tests<br/>Render: auto-deploy"]
+
+    subgraph SVC["FastAPI service · one container, one process"]
+        direction TB
+        DB[("<b>SQLite</b> (WAL)<br/>source tables · scoring runs<br/>conversations · alerts")]
+        ENG["<b>Scoring service</b><br/>active scoring run, cached in memory"]
+        CHAT["<b>POST /chat</b>"]
+        AGENT["<b>Agent loop</b><br/>strict tool schemas · ModelAnswer<br/>guardrails · trajectories"]
+        TOOLS["<b>5 tools</b><br/>rank · explain · compare · breakdown · weather_stat"]
+        REST["<b>GET /rankings · /hubs · /health</b><br/>no LLM"]
+        ALERT["<b>Alerts</b><br/>monthly outlook · score change<br/>outbox delivery"]
+        DB --> ENG
+        CHAT --> AGENT --> TOOLS --> ENG
+        REST --> ENG
+        ENG --> ALERT
+        ALERT <--> DB
+        CHAT <-. "history" .-> DB
     end
 
-    subgraph SVC["Layer 3 - FastAPI service (1 container)"]
-        direction LR
-        DB[("SQLite")] --> ENG["Scoring engine<br/>deterministic,<br/>no LLM"]
-        ENG --> TOOLS["Agent tools<br/>rank / compare /<br/>explain / weather_stat"]:::planned
-        TOOLS <-- JSON --> AGENT["Agent loop<br/>tool use +<br/>AgentAnswer schema"]:::planned
-        AGENT --> API["REST API<br/>/chat /rankings<br/>/hubs /alerts"]:::planned
-        ENG -- "/rankings (no LLM)" --> API
-        SCHED["Scheduler (hourly)<br/>risk change detection"]:::planned --> DB
-        RULES["config/<br/>disruption.yaml"] --> ENG
-    end
+    UI["<b>Chat page</b><br/>static HTML/JS<br/>answer · details · agent steps · alerts"]
+    CLAUDE["<b>Anthropic API</b><br/>Claude Sonnet 5.5"]
+    HOOK["<b>Webhook</b><br/>Slack-compatible JSON"]
+    EVAL["<b>Eval runner</b><br/>24 cases · history"]
 
-    CLAUDE["Anthropic API<br/>Claude"]:::planned
-
-    subgraph CLI["Layer 4 - Clients"]
-        direction LR
-        UI["Chat UI<br/>HTML/JS + voice"]:::planned
-        EVAL["Eval runner"]:::planned
-        HOOK["Webhook alert<br/>(Slack)"]:::planned
-    end
-
-    OM -- "1 call per hub" --> ING
-    FEMA -- "1 call per county" --> ING
-    SNAP -- "restore at startup" --> DB
-    NWS --> SCHED
+    SNAP -- "git push" --> GIT
+    GIT -- "Docker image with the snapshot" --> DB
+    UI -- "HTTP JSON" --> CHAT
+    UI -.-> REST
+    EVAL -- "same agent loop" --> AGENT
     AGENT <-- "Messages API" --> CLAUDE
-    API <-- "HTTP JSON" --> UI
-    API <-- "HTTP JSON" --> EVAL
-    SCHED -- "POST on change" --> HOOK
+    ALERT -- "POST" --> HOOK
 
-    classDef planned stroke-dasharray: 5 5,stroke:#888,color:#555;
+    classDef client fill:#f3eefa,stroke:#7d5bb5,color:#271a3b
+    classDef api fill:#e8f1fb,stroke:#3b78c3,color:#13263d
+    classDef agent fill:#fff4e5,stroke:#d9822b,color:#3d2a12
+    classDef ext fill:#fdecec,stroke:#c0504d,color:#3b1414
+    classDef eng fill:#eaf6ec,stroke:#3c9a52,color:#14301b
+    classDef batch fill:#eef3f3,stroke:#5b8a8a,color:#1d2e2e
+    classDef group fill:#fafafa,stroke:#c8c8c8,color:#444
+    class UI,EVAL client
+    class CHAT,REST api
+    class AGENT,TOOLS,ALERT agent
+    class CLAUDE,HOOK,APIS ext
+    class ENG,DB eng
+    class ING,SNAP,GIT batch
+    class OFF,SVC group
 ```
 
-**Main design choice: batch ingestion is separate from online serving.** The web service never
-calls a weather API to answer a question about history. It reads SQLite, which is rebuilt from
-the committed snapshot at startup. As a result the demo works even if a public API is down or
-rate-limited, answers are fast, and evals are repeatable.
+**Main design choice: batch ingestion is separate from serving.** The service never calls a weather
+API to answer a question. It starts from the committed snapshot, so the demo works when a public API
+is down or rate-limited, answers are fast, and evals run on identical data every time. New data
+reaches production as a commit: ingest → snapshot → push → CI → Render rebuilds → the app scores the
+new data at startup.
 
-## 2. One chat question, step by step (planned flow)
+## 2. One chat question, step by step
 
 ```mermaid
 sequenceDiagram
     autonumber
     actor U as Analyst
-    participant UI as Chat UI
+    participant UI as Chat page
     participant API as FastAPI /chat
     participant A as Agent loop
-    participant C as Claude API
+    participant C as Claude Sonnet 5.5
     participant T as Tools
-    participant E as Scoring engine
+    participant S as Scoring service
     participant DB as SQLite
 
-    U->>UI: "What are the 10 most dangerous hubs?"
+    U->>UI: "Why is the Dallas hub's risk high?"
     UI->>API: POST /chat {session_id, message}
-    API->>DB: load conversation history
-    API->>A: history + new message
-    A->>C: messages + tool schemas (strict JSON)
-    C-->>A: tool_use rank_hubs{hazard:"total", top_n:10}
-    A->>T: validate input (Pydantic), run tool
-    T->>E: rank(results, "total", None, 10)
-    E->>DB: weather + declarations (read)
-    E-->>T: ranking + per-hazard breakdown
-    T-->>A: JSON result
+    API->>DB: last 6 question/answer pairs
+    API->>A: history + question
+    A->>C: system prompt, 5 strict tool schemas, ModelAnswer schema (prompt cache)
+    C-->>A: tool_use explain_hub{hub_id: "dallas"}
+    A->>T: validate arguments (Pydantic), invalid → error back to the model
+    T->>S: active scoring run (in memory)
+    S-->>T: days, index, tier, rank 17 of 50, drivers, FEMA disasters
+    T-->>A: JSON result (pre-computed numbers, caveats, method, scoring run)
     A->>C: tool_result
-    C-->>A: final answer in AgentAnswer JSON schema
-    A->>A: validate with Pydantic (retry once on failure)
-    A->>DB: save turn
-    A-->>API: AgentAnswer
-    API-->>UI: JSON (answer, ranking, drivers, assumptions, confidence)
-    UI-->>U: text + ranking table + sources/assumptions panel
+    Note over A,C: at most 2 tool rounds, a repeat-only round or the 6th call<br/>forces the answer with tool_choice none
+    C-->>A: final answer as ModelAnswer JSON
+    A->>A: validate (1 retry), attach the engine's ranking if rank_hubs ran
+    A->>DB: save the turn
+    A->>A: save the trajectory (JSON file)
+    A-->>API: AgentAnswer + tool calls + tokens + trajectory
+    API-->>UI: JSON
+    UI-->>U: answer · details panel built from the engine data · agent steps
 ```
 
-The LLM never produces a number: it chooses tools and writes the explanation. All numbers come
-from the scoring engine, and the eval checks that the LLM's ranking matches the engine's.
+The LLM never produces a number: it chooses tools and writes the explanation; every number comes from
+the engine, and the evals check it (`docs/EVALS.md`).
 
-## 3. Component summary
+## 3. Background flows: startup, new data, alerts
 
-| Component | Technology | Status | Why this choice |
-|---|---|---|---|
-| Hub list | YAML, validated by Pydantic | built | business config, editable without code |
-| Ingestion | Python CLI, httpx + tenacity retries | built | runs where the API quota allows (laptop, cron); decoupled from serving |
-| Raw cache | JSON files on disk | built | protects API quota, audit trail ("where did this number come from?") |
-| Storage | SQLite + parquet snapshot in git | built | small relational data, no server to run, reproducible |
-| Scoring | Pure Python + pandas, rules in YAML | built | deterministic and explainable; analysts edit thresholds, not code |
-| Report CLI | `python -m app.scoring.report` | built | ranking without the LLM (sanity check, demo) |
-| REST API | FastAPI | planned | Pydantic-native, auto `/docs` |
-| Agent | Anthropic SDK, manual tool-use loop | planned | ~100 lines, transparent, no framework to explain |
-| Structured output | Pydantic `AgentAnswer` -> JSON schema | planned | one schema for the LLM contract and the validation |
-| Chat UI | One static HTML/JS page served by FastAPI | planned | one process, one URL; voice via browser Web Speech API |
-| Alerts | APScheduler in-process + webhook POST | planned | no extra infrastructure (a cron would be needed with several replicas) |
-| Evals | YAML cases + Python runner | planned | checks tool choice, hubs, ranking fidelity, numbers, scoping |
-| Deployment | Docker on Render | planned | one container; DB rebuilt from the snapshot at startup |
+```mermaid
+flowchart TB
+    START["<b>Server start</b>"] --> RESTORE["restore the snapshot into SQLite"]
+    RESTORE --> MATCH{"active scoring run made from<br/>the current rules and data?"}
+    MATCH -- yes --> LOAD["load it (0.05 s)"]
+    MATCH -- no --> SCORE["score all hubs (~1 s) → store a run<br/>activate it in one transaction (lock + re-check)"]
+    SCORE --> CHANGE["score-change alert stored<br/>in the same transaction"]
+    LOAD --> SERVE["serve requests from the cached run<br/>(reload within 5 s if another run becomes active)"]
+    CHANGE --> SERVE
+
+    INGEST["<b>Ingestion</b> (laptop)"] --> NEWRUN["new data → new scoring run<br/>(never after a failed download)"]
+    NEWRUN --> CHANGE
+
+    TICK["<b>Alert loop</b> every 60 s<br/>(+ POST /alerts/check)"] --> OUTLOOK["monthly outlook due?<br/>(7 days before the month, dedup key per month)"]
+    TICK --> SEND["deliver pending alerts<br/>(claim with a lease, retry, at-least-once)"]
+    OUTLOOK --> SEND
+    CHANGE --> SEND
+    SEND --> WEBHOOK["webhook POST · GET /alerts · page"]
+
+    classDef step fill:#eaf6ec,stroke:#3c9a52,color:#14301b
+    classDef alert fill:#fff4e5,stroke:#d9822b,color:#3d2a12
+    classDef start fill:#e8f1fb,stroke:#3b78c3,color:#13263d
+    class START,INGEST,TICK start
+    class RESTORE,MATCH,LOAD,SCORE,SERVE,NEWRUN step
+    class CHANGE,OUTLOOK,SEND,WEBHOOK alert
+```
+
+## 4. Component summary
+
+| Component | Technology | Why this choice |
+|---|---|---|
+| Hub list | `config/hubs.yaml`, validated by Pydantic | business config, editable without code |
+| Ingestion | Python CLI, httpx + tenacity retries, local response cache | runs where the API quota allows; decoupled from serving; ends with a scoring run |
+| Storage | parquet snapshot in git + SQLite (WAL) | small relational data, no server to run, reproducible; plain SQL for a later Postgres move |
+| Scoring engine | pure Python + pandas, rules in `config/disruption.yaml` | deterministic and explainable; analysts edit thresholds, not code |
+| Scoring runs | SQLite tables, one set per run (rules hash + data fingerprint) | every score traceable and comparable; computed on write, cached in memory |
+| Index and tiers | fixed reference in the rules (100 = median hub) | comparable, stable scores; pro-rated per month and season |
+| REST API | FastAPI | Pydantic-native, `/docs`, one process for page, API and agent |
+| Agent | Anthropic SDK, hand-written tool-use loop | transparent, every step logged (trajectories); guardrails from the eval history |
+| JSON contract | Pydantic tool inputs (strict) + `ModelAnswer` structured output | one definition for the schema sent to Claude and the validation |
+| Chat page | one static HTML/JS page (desktop) | no build step, a plain client of `POST /chat`; details built from engine data |
+| Alerts | in-process loop + `POST /alerts/check`, outbox table, webhook | no extra infrastructure; exactly-once creation, at-least-once delivery |
+| Evals | YAML cases + Python runner, history and comparison | correctness vs efficiency, pass rates over repeats |
+| CI | GitHub Actions | the offline tests on every push |
+| Deployment | Docker on Render (Blueprint), optional site password | one container; the snapshot is in the image; auto-deploy on push |

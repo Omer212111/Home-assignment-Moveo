@@ -349,7 +349,8 @@ eval cost.
 | Endpoint | LLM | Description |
 |---|---|---|
 | `GET /` | - | The chat page |
-| `GET /health` | no | Status, number of hubs scored, active scoring run and data date |
+| `GET /health` | no | Status, number of hubs scored, active scoring run and data date (no password needed) |
+| `GET /health/llm` | no | Checks the API key and the connection to Anthropic without spending tokens |
 | `GET /rankings?hazard=&region=&top_n=&season=&order=` | no | Deterministic ranking, e.g. `?season=summer` or `?order=least` |
 | `GET /hubs/{hub_id}` | no | Full breakdown of one hub: hazards, drivers, counted FEMA disasters |
 | `GET /alerts` | no | Recent alerts (monthly outlooks, score changes) with delivery status |
@@ -392,7 +393,7 @@ Two layers:
 
 | Layer | Checks | Command | Cost |
 |---|---|---|---|
-| Unit tests (`tests/`, 89 tests; run on every push by GitHub Actions) | Scoring rules, time breakdowns, stored scoring runs, ingestion, API, agent loop with a scripted fake Claude, the eval checks themselves | `uv run pytest -q` | free, offline |
+| Unit tests (`tests/`, 92 tests; run on every push by GitHub Actions) | Scoring rules, time breakdowns, index, stored scoring runs, alerts and concurrency, ingestion, API and password, agent loop with a scripted fake Claude, the eval checks and runner | `uv run pytest -q` | free, offline |
 | Agent evals (`evals/`, 24 cases / 29 turns) | The real model on edge cases: the 4 assignment questions, a city that is not a hub, "top 100" when only 50 exist, follow-ups, "winter" hazard vs season, safest hubs, worst month, per-year comparison, hurricane season | `uv run python -m evals.run` | ~$0.80 |
 
 Checks on every turn: valid answer format, the right tool with the right arguments, ranking equal
@@ -499,7 +500,7 @@ scores, Redis as the read cache).
 
 ```
 app/
-  main.py               FastAPI: /, /health, /rankings, /hubs/{id}, /chat
+  main.py               FastAPI: page, /chat, /rankings, /hubs/{id}, /alerts, /health; optional password
   settings.py           settings from .env (Pydantic)
   config.py             loads and validates config/*.yaml
   db.py                 SQLite schema, snapshot restore/export
@@ -525,9 +526,10 @@ config/
   alerts.yaml           alert policy (thresholds, lead time)
 data/
   snapshot/             parquet snapshot (in git)
-evals/                  cases.yaml, checks.py, run.py, report.json, trajectories/
-tests/                  offline tests
-docs/                   design documents (section 13)
+evals/                  cases.yaml (24 cases), checks.py, run.py, history/, trajectories/
+tests/                  offline tests (92)
+docs/                   design documents and the one-page PDF summary (section 13)
+.github/workflows/      CI: the offline tests on every push
 ```
 
 ---
@@ -557,12 +559,16 @@ Every answer from the agent carries `assumptions`, `confidence` and `uncertainty
 
 ## 12. Status and next steps
 
-Built: data ingestion, scoring engine, time breakdowns, 5-tool agent with guardrails, API, chat
-page with agent-step view, trajectories, scores stored per scoring run, standardised index and tiers (also per month), scoring triggered by ingestion, alerts (monthly outlook + score change) safe under concurrency, Docker image and Render blueprint, 89 tests with CI, 24-case eval set, 15-case eval set (run 7: 110/111).
+**Built and deployed** (https://hub-weather-risk.onrender.com/): data ingestion; deterministic scoring
+engine with month / season / year breakdowns; standardised index and tiers; scores stored per
+scoring run; a 5-tool agent with strict JSON contracts and guardrails; the API and chat page (agent
+steps, alerts); trajectories; alerts (monthly outlook + score change) safe under concurrency; 92
+offline tests with CI; a 24-case eval set (8 runs analysed in `docs/EVALS.md`; the latest full run
+before the robustness cases: 110/111 correctness checks).
 
-Next (in order): refresh `docs/ARCHITECTURE.md`; bonus: voice input
-(browser Web Speech API); live NWS alerts for storms in the coming days. Longer-term improvements (cost in
-dollars, tail risk, FEMA National Risk Index, uncertainty ranges) are in `docs/IMPROVEMENTS.md`.
+**Next:** eval run on the 24-case set; bonus voice input (browser Web Speech API) and live NWS alerts.
+Longer-term improvements (cost in dollars, tail risk, FEMA National Risk Index, uncertainty ranges)
+are in `docs/IMPROVEMENTS.md`.
 
 ---
 
@@ -571,7 +577,7 @@ dollars, tail risk, FEMA National Risk Index, uncertainty ranges) are in `docs/I
 | Document | Contents |
 |---|---|
 | `docs/DESIGN_SUMMARY.pdf` | **One-page design and architecture summary**: run instructions, architecture, agent loop, scoring, storage, alerts, repository structure |
-| `docs/ARCHITECTURE.md` | Component diagram, chat sequence, component table |
+| `docs/ARCHITECTURE.md` | Component diagram, one chat question step by step, background flows (startup, new data, alerts), component table |
 | `docs/DATA_MODEL.md` | Diagram of every table (source tables, scoring runs, alerts) and how they connect |
 | `docs/DATA_MODEL_SCALABLE.md` | Target data model for scale: Postgres, versioned rules and scoring runs, incremental pipeline, migration path |
 | `docs/DESIGN_DECISIONS.md` | Every design decision with the options considered and why (API, agent, UI, tools, guardrails, caching, scoring runs, alerts, concurrency) |
@@ -579,5 +585,5 @@ dollars, tail risk, FEMA National Risk Index, uncertainty ranges) are in `docs/I
 | `docs/EVALS.md` | Eval cases and the analysis of every run |
 | `docs/DATA_NOTES.md` | Data quality checks, calibration, known limitations |
 | `docs/IMPROVEMENTS.md` | What to build next and why |
-| `docs/PLAN.md`, `docs/PLAN-v2-slices.md` | The original plan |
+| `docs/PLAN.md`, `docs/PLAN-v2-slices.md` | The original plan (historical: written before the build) |
 | `docs/HANDOFF.md` | State of the project for continuing in a new AI session |

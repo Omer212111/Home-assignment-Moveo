@@ -1,5 +1,10 @@
 # Weather Risk Intelligence Agent: Architecture & Implementation Plan
 
+> **Historical document.** This is the plan written before the build, kept as part of the record of
+> the work. What was actually built differs in places (e.g. 50 hubs, five agent tools, scoring runs,
+> alerts, deployment); for the current state see `README.md`, `docs/ARCHITECTURE.md` and
+> `docs/DESIGN_DECISIONS.md`.
+
 > Status: plan v1, written before any code. Every decision below comes with the
 > engineering reason behind it, so the plan can also serve as the basis for the
 > design document that has to be submitted.

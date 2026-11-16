@@ -1,5 +1,10 @@
 # Weather Risk Intelligence Agent: Plan v2 (vertical slices, data first)
 
+> **Historical document.** This is the plan written before the build, kept as part of the record of
+> the work. What was actually built differs in places (e.g. 50 hubs, five agent tools, scoring runs,
+> alerts, deployment); for the current state see `README.md`, `docs/ARCHITECTURE.md` and
+> `docs/DESIGN_DECISIONS.md`.
+
 ## Context
 This is a take-home assignment for an FDE role, with a 24h deadline and about 12 hours of work. The full design reasoning is in `/home/user/PLAN.md`.
 

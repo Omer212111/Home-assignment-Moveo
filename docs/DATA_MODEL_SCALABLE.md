@@ -1,9 +1,10 @@
 # Data model for scale: the target design
 
 `docs/DATA_MODEL.md` describes what runs today: 50 hubs, 5 years of daily weather, SQLite rebuilt
-from a snapshot, scores recomputed in memory at startup. That is the right size for a prototype.
-This document is the design for when the product grows. It is a **design, not yet implemented**;
-the last section gives a migration path in small steps.
+from a snapshot, scores stored per scoring run (rules hash + data fingerprint) and cached in memory.
+That is the right size for a prototype. This document is the design for when the product grows.
+**Partly implemented**: step 2 of the migration path (versioned rules, scoring runs, persisted
+disruption days and monthly scores, run comparison and alerts) is built; the rest is a design.
 
 ## 1. What "scale" means here
 
@@ -11,10 +12,10 @@ the last section gives a migration path in small steps.
 |---|---|---|---|
 | Hubs | 50, one company | 10,000+, several companies | full recompute at startup (1.1 s -> minutes); memory |
 | Weather history | 5 years, daily | 20-40 years, daily (later hourly) | SQLite file size; full reload on every start |
-| Data refresh | manual batch | daily incremental + live alerts | snapshot rebuild; scores stale until restart |
-| Scoring rules | one YAML, edited in place | versioned, reviewed, A/B compared | cannot reproduce last month's score |
+| Data refresh | manual batch, ending with a new scoring run | daily incremental + live alerts | snapshot rebuild and redeploy; full re-score |
+| Scoring rules | one YAML, versioned by hash in `rule_sets` (built) | reviewed, A/B compared, draft / active | no review workflow; only one active run |
 | App instances | 1 container | many replicas | SQLite and in-memory state are per process |
-| Questions | ad hoc chat | chat + dashboards + alerts | every number recomputed or held in RAM |
+| Questions | chat + alerts (built) | chat + dashboards + alerts | the active run is held in RAM per process |
 
 Rough volume at target: 10,000 hubs x 30 years x 365 days = **110 M weather rows** (daily; ~1 GB
 in Postgres, ~1 GB compressed hourly x24 in a columnar store); disruption days ~0.5 % of weather
@@ -186,20 +187,22 @@ rate limits), so losing it costs latency, never correctness.
 
 | Question | Today | Target |
 |---|---|---|
-| Rank hubs (any hazard, region, season) | in-memory sort | `SELECT hub_id, SUM(days) ... FROM hub_scores_monthly WHERE run_id = :active AND month IN (...) GROUP BY hub_id ORDER BY 2 DESC LIMIT n` (Redis for the common ones) |
-| Explain a hub | in memory | `hub_scores_monthly` + `disruption_days` + `disasters` for that hub |
-| By month / season / year | in-memory records | `GROUP BY month` / season / `EXTRACT(year FROM day)` |
+| Rank hubs (any hazard, region, season) | in-memory sort of the active run | `SELECT hub_id, SUM(days) ... FROM hub_scores_monthly WHERE run_id = :active AND month IN (...) GROUP BY hub_id ORDER BY 2 DESC LIMIT n` (Redis for the common ones) |
+| Explain a hub | active run in memory (loaded from the scoring tables) | `hub_scores_monthly` + `disruption_days` + `disasters` for that hub |
+| By month / season / year | disruption days of the active run; `monthly_scores` table | `GROUP BY month` / season / `EXTRACT(year FROM day)` |
 | % of days with snowfall | pandas over memory | `SELECT COUNT(*) FILTER (WHERE snowfall_cm > 0) ... FROM weather_daily` (one partition) |
-| Did a hub's risk change? | not possible | compare two `scoring_runs` |
+| Did a hub's risk change? | compare two `scoring_runs` (built: `store --diff`, score-change alerts) | same, with run history kept in Postgres |
 
 ## 7. Migration path from today (each step works on its own)
 
 1. **Normalise what we have, still SQLite:** `disasters` + `disaster_areas`; `locations` and
    `counties`; weather keyed by location. Snapshot and tests unchanged in spirit.
-2. **Version the logic:** `rule_sets` and `scoring_runs`; persist `disruption_days` and
-   `hub_scores_monthly`; the tools read tables instead of memory. Enables the alerts bonus.
+2. **Version the logic (built):** `rule_sets`, `scoring_runs`, `hub_results`, `hazard_scores`,
+   `monthly_scores` and `disruption_days`; a run is created when data or rules change; the service
+   serves the active run (cached in memory); run comparison and alerts (`DESIGN_DECISIONS.md` 17-21).
 3. **Postgres:** same schema (plain SQL today, so the move is mechanical), partitions by year,
    `DATABASE_URL` setting; SQLite kept for local development and tests.
-4. **Incremental ingestion and scheduler:** watermarks, a daily job, alerts on score changes.
+4. **Incremental ingestion and scheduler:** watermarks, a daily job (score-change alerts already
+   fire on every new run).
 5. **Raw responses to object storage; Redis as the read cache** for hot scores and sessions.
 6. **Multi-tenant:** `organizations`, org-scoped hubs and chats, row-level security in Postgres.

@@ -1,94 +1,84 @@
 # Handoff: state of the project for a new AI session
 
-Last updated: 2026-11-15 17:30 UTC, after commit "Docs: design decisions for the chat UI".
+Last updated: 2026-11-16 07:20 UTC. Work started around 13:30 UTC on 2026-11-15 (24-hour deadline).
 
-## 1. The assignment (FDE take-home, 24-hour deadline)
-Build a "Weather Risk Intelligence Agent" for a US logistics company that ranks distribution hubs by weather-disruption exposure to prioritise resilience investment. Required:
-- public weather/hazard APIs
-- deterministic ranking logic (not only LLM)
-- clear reasoning
-- conversational follow-ups
-- a chat interface that uses an API
-- a JSON-schema contract between the LLM and code
-- a small eval set with a way to run it
-- clear assumptions and uncertainty
-- deliverables: source code + run instructions (a deployed URL is preferred), a short design/architecture doc (architecture, repository structure, data storage choice), and **the full AI session transcript (mandatory)**
-- bonus: voice; an alert when a hub's score changes
+## 1. The assignment (FDE take-home)
+Build a "Weather Risk Intelligence Agent" for a US logistics company that ranks distribution hubs by
+weather-disruption exposure to prioritise resilience investment. Required: public weather/hazard
+APIs; deterministic ranking logic (not only LLM); clear reasoning; conversational follow-ups; a chat
+interface that uses an API; a JSON-schema contract between the LLM and code; a small eval set with a
+way to run it; clear assumptions and uncertainty. Deliverables: source code + run instructions (a
+deployed URL is preferred), a short design/architecture doc (architecture, repository structure,
+data storage choice), and **the full AI session transcript (mandatory)**. Bonus: voice; an alert when
+a hub's score changes.
 
-Example questions the agent should answer:
-1. Which hubs in the Midwest are most exposed to winter disruption? (**done**)
-2. Compare Miami and Houston in terms of hurricane and flood exposure. (**done, slice 3**)
-3. What percentage of days in Denver last year had snowfall? (**done, `weather_stat`**)
-4. Why is the Dallas hub's weather disruption risk high? (**done, slice 3**)
-
-Work started around 13:30 UTC on 2026-11-15; about 4 hours used so far.
+All four example questions are answered and covered by eval cases: Midwest winter (`rank_hubs`),
+Miami vs Houston hurricane + flood (`compare_hubs`), Denver snowfall last year (`weather_stat`),
+why Dallas is high (`explain_hub`, which states Dallas is rank 17 of 50).
 
 ## 2. Working agreement with the user (important)
-- **Stop after every stage** so the user can review it. Explain the engineering dilemmas and why each choice was made. Do not start the next stage without approval.
-- The user works on **Windows, PowerShell 5.1**: `&&` does not work, so give one command per code block. They use `uv`.
-- **Anything that calls the Anthropic API or Open-Meteo runs on the user's laptop** (their `.env` holds `ANTHROPIC_API_KEY`). Give them exact commands and ask them to paste the output.
-- When the user asks, save explanations into `docs/` (e.g. `docs/DESIGN_DECISIONS.md`). Docs are in English.
-- **The UI targets desktop only** (user's decision): test at desktop size; no phone work. Existing small-screen CSS rules stay but are not maintained.
-- Commit and push directly to `main` on https://github.com/Omer212111/home-assignment-moveo after each change.
+- **Stop after every stage** so the user can review it. Explain the engineering dilemmas and why each
+  choice was made. Do not start the next stage without approval.
+- The user works on **Windows, PowerShell 5.1**: `&&` does not work, so give one command per code
+  block. They use `uv`.
+- **Anything that calls the Anthropic API or Open-Meteo runs on the user's laptop** (their `.env`
+  holds `ANTHROPIC_API_KEY`). Give exact commands and ask for the output.
+- Docs are in English. Commit and push directly to `main` after each change.
+- **The UI targets desktop only** (user's decision).
+- **The README must not mention the raw API cache** (user's decision); it is documented in
+  `docs/DATA_MODEL.md` and `docs/DESIGN_DECISIONS.md` only.
 
 ## 3. Cloud-session constraints (found by testing)
-- Reachable: OpenFEMA (`www.fema.gov`), NWS (`api.weather.gov`), PyPI/npm.
-- **Not usable:**
-  - Open-Meteo (shared-IP quota exhausted; other Open-Meteo hosts blocked)
-  - FEMA National Risk Index (ArcGIS host blocked; the static CSV URL redirects)
-  - cdn.jsdelivr.net
-  - **the Anthropic API**: the credential form refuses Anthropic hosts, and the session does not sign requests (401). The user chose to run API calls on the laptop.
-- A personal cloud environment named `home-assignment-moveo` exists (same network as the Default environment).
-- For browser checks: headless Chromium via Playwright, with `/chat` intercepted (see `docs/DESIGN_DECISIONS.md` section 10). Mermaid can be installed from npm to render diagrams.
+- Reachable: OpenFEMA, NWS, PyPI/npm, GitHub (push works; `gh` works for Actions status).
+- **Not reachable:** Open-Meteo (quota), FEMA National Risk Index, `onrender.com` (the live app),
+  and the Anthropic API (TLS interception; API calls run on the laptop).
+- Docker works after starting `dockerd`; builds need the sandbox CA injected through a temporary
+  Dockerfile copy (`--build-context ca=/root/.ccr`); the committed `Dockerfile` stays clean.
+- Browser checks: headless Chromium (Playwright) with `/chat` intercepted. Diagrams: mermaid-cli
+  (`mmdc`) with Chromium at `/opt/pw-browsers/chromium`.
 
 ## 4. What is built (all on `main`)
 | Area | Files | Notes |
 |---|---|---|
 | Hubs | `config/hubs.yaml` | 50 most populous US cities: lat/lon, county FIPS, Census region |
-| Ingestion | `app/ingest.py`, `app/sources/*` | Open-Meteo daily 2021-2025 (91,300 rows, run on the laptop), OpenFEMA declarations 2006-2026 (669 disasters, 47 counties); raw cache `data/raw/`, snapshot `data/snapshot/*.parquet` (committed); SQLite rebuilt at startup |
-| Scoring | `config/disruption.yaml`, `app/scoring/disruption.py` | **KPI: expected disruption days per year**; weather rules (worst rule per day, events with recovery tails), FEMA DR declarations for hurricanes (7 days each) and severe storms (1.5), de-duplication, calibration v2 (heat 43 C, cold -25 C, snow 7/17 cm, ice proxy) |
-| Report CLI | `app/scoring/report.py` | `uv run python -m app.scoring.report [--hazard --region --hub]` |
-| API | `app/main.py` | `GET /` (UI), `/health`, `/rankings`, `/hubs/{id}`, `POST /chat` |
-| Agent | `app/agent/{schemas,tools,prompts,loop}.py` | `claude-sonnet-5-5`, effort low, refusal fallbacks; hand-written tool loop; tools `rank_hubs`, `explain_hub`, `compare_hubs` (slice 3, `DESIGN_DECISIONS.md` section 11); `ModelAnswer` = LLM output schema (no ranking), `AgentAnswer` = API response (server attaches the ranking from the engine); per-question cache for identical tool calls; tool schemas via `anthropic.transform_schema` (strict mode rejects min/max) |
-| UI | `app/static/index.html` | single page, no libraries, chat + details panel |
-| Raw cache | `app/sources/http_cache.py` | Redis when `REDIS_URL` is set (`import-files`, `status`), else local `data/raw/` files, git-ignored since section 22 (`DESIGN_DECISIONS.md` sections 16, 22) |
-| Scores | `app/scoring/store.py` | SQLite scoring tables, one set per scoring run; memory caches the active run (`DESIGN_DECISIONS.md` section 17) |
-| Index | `config/disruption.yaml` `index` | 100 = median hub (4.85 days, fixed); tiers low..very high; per month/season pro-rated, `monthly_scores` table (`DESIGN_DECISIONS.md` section 18) |
-| Write path | `app/ingest.py::score_after_ingest` | ingestion creates the scoring run (`DESIGN_DECISIONS.md` section 19) |
-| Alerts | `app/alerts.py`, `config/alerts.yaml` | monthly outlook digest (index >= 300, >= 3 events, 7 days ahead) + score-change alerts (>= 25 points or tier), dedup, outbox delivery with leases, safe under concurrency (`DESIGN_DECISIONS.md` sections 20-21) |
-| Deploy | `Dockerfile`, `render.yaml`, `APP_PASSWORD` | README section 1a |
-| Evals | `evals/` | 24 cases / 29 turns; correctness vs efficiency; `--repeat`; history + comparison; CI for offline tests |
-| Tests | `tests/` | 89 offline tests (`uv run pytest -q`) |
-| Evals | `evals/cases.yaml`, `evals/checks.py`, `evals/run.py` | 15 cases / 17 turns; `uv run python -m evals.run` (~$0.16-0.20 per run, laptop only) |
+| Ingestion | `app/ingest.py`, `app/sources/*` | Open-Meteo daily 2021-2025 (91,300 rows), OpenFEMA declarations 2006-2026 (669 rows, 481 disasters, 47 counties); local raw cache (files or Redis, not in git); writes `data/snapshot/*.parquet` (committed) and ends with a scoring run (`DESIGN_DECISIONS.md` 16, 19, 22) |
+| Scoring | `config/disruption.yaml`, `app/scoring/disruption.py`, `periods.py` | KPI expected disruption days per year; weather rules + FEMA DR declarations, de-duplicated; month / season / year breakdowns that sum to the annual total |
+| Index | `config/disruption.yaml` `index` | 100 = median hub (4.85 days, fixed); tiers low < 50 ... very high >= 200; pro-rated per month and season (section 18) |
+| Scoring runs | `app/scoring/store.py`, `service.py` | SQLite tables per run (rules hash + data fingerprint); one active; memory caches it and reloads a new run within 5 s (section 17) |
+| API | `app/main.py` | `/` (page), `/health`, `/health/llm`, `/rankings`, `/hubs/{id}`, `/alerts`, `POST /alerts/check`, `POST /chat`; optional `APP_PASSWORD` |
+| Agent | `app/agent/*` | Claude Sonnet 5.5, effort low; 5 tools (`rank_hubs`, `explain_hub`, `compare_hubs`, `hub_breakdown`, `weather_stat`); strict schemas; `ModelAnswer`; server attaches the ranking; at most 2 tool rounds (error rounds free); prompt caching; trajectories (sections 1-4, 9, 11-15) |
+| UI | `app/static/index.html` | chat, details panel (ranking with index and tier, comparison, breakdown, weather tables), agent steps, alerts |
+| Alerts | `app/alerts.py`, `config/alerts.yaml` | monthly outlook (index >= 300 and >= 3 events, 7 days ahead, one digest) + score change (>= 25 points or tier); dedup key, outbox with leases, safe under concurrency (sections 20-21) |
+| Evals | `evals/` | 24 cases / 29 turns; correctness vs efficiency checks; `--case a,b`, `--repeat N`; history in `evals/history/` and comparison |
+| Tests | `tests/`, `.github/workflows/tests.yml` | 92 offline tests; CI on every push (passing) |
+| Deploy | `Dockerfile`, `render.yaml` | **live** at https://hub-weather-risk.onrender.com/ (password protected; free plan) |
+| Docs | `README.md`, `docs/*`, `docs/DESIGN_SUMMARY.pdf` | one-page design summary PDF; architecture, data model, scalable design, decisions, evals |
 
-Current top of the ranking: Boston 13.1, Minneapolis 11.7, Denver 10.3, Milwaukee 10.3, Chicago 9.6 (winter-driven). Virginia Beach (#6) is inflated by coastal wind, a documented limitation.
+Current top of the ranking: Boston 13.1 (index 270), Minneapolis 11.7, Denver 10.3, Milwaukee 10.3
+(all very high, winter-driven). Virginia Beach (#6) is inflated by coastal wind (documented).
 
-## 4b. Run the chat locally
-`uv run uvicorn app.main:app --reload`, then open http://127.0.0.1:8000/ (needs `ANTHROPIC_API_KEY` in `.env`).
-Agent trajectories (thinking summaries, tool calls): "Agent steps" switch in the UI; files in `data/trajectories/`; `uv run python -m app.agent.trajectory` prints the latest (`DESIGN_DECISIONS.md` section 12).
+## 5. Run it
+`uv sync`, `.env` with `ANTHROPIC_API_KEY`, `uv run uvicorn app.main:app --reload`, open
+http://127.0.0.1:8000/. Tests: `uv run pytest -q`. Evals: `uv run python -m evals.run`.
 
-## 5. Documentation to read first
-- `docs/DESIGN_DECISIONS.md`: every decision for the API, agent and UI, with reasons (sections 1-10)
-- `docs/ARCHITECTURE.md` (+ `docs/img/`): component diagram, chat sequence, component table
-- `docs/DATA_NOTES.md`: data checks, calibration reasons, coastal-wind limitation
-- `docs/EVALS.md`: eval cases, run 1 and run 2 results, changes made
-- `docs/IMPROVEMENTS.md`: post-baseline list (cost metric research, tail risk, NRI, ...)
-- `docs/PLAN.md`, `docs/PLAN-v2-slices.md`: the original plan
+## 6. Documentation to read first
+- `README.md`: overview, run and deploy, KPI, agent, API, evals, data, architecture, storage, structure
+- `docs/DESIGN_DECISIONS.md`: every decision with options and reasons (sections 1-22, chronological)
+- `docs/ARCHITECTURE.md`: components, chat sequence, background flows, component table
+- `docs/DATA_MODEL.md` / `docs/DATA_MODEL_SCALABLE.md`: tables today / target design at scale
+- `docs/EVALS.md`: eval cases, scoring, and the analysis of runs 1-8
+- `docs/QUESTION_CATALOG.md`, `docs/DATA_NOTES.md`, `docs/IMPROVEMENTS.md`
 
-## 6. Eval history
-- **Run 1:** 36/37. "5 years" was not grounded (the model derived it); a duplicate tool call in the baseline; a 50-hub answer took 22 s and 4k output tokens.
-- Changes after run 1: `weather_years` in the tool's `method`; per-question cache; the server attaches the ranking; at most 10 rows in the answer text.
-- **Run 2:** 37/37, $0.16; the 50-hub answer took 9.6 s and 1,147 output tokens. **But duplicate calls persist**: baseline and `impossible_n` each called `rank_hubs` twice with identical arguments (`impossible_n` input went up to 26,769 tokens). Report committed (`ba3f1a0`).
-- Changes after run 2 (commit `e1a48c2`): the prompt no longer says "your last call"; each tool call records the `step` (model call) that requested it; the runner prints steps, cached duplicates and a duplicate count.
-- **Run 3:** 36/37 (see `docs/EVALS.md`). Duplicates come in separate model calls; `impossible_n` exposed a ranking-attach bug. Fixes postponed to `docs/IMPROVEMENTS.md` section 8.
+## 7. Eval history (details in `docs/EVALS.md`)
+Runs 1-3: grounding fix, server-attached ranking, repeated calls. Run 4: loops until the step limit
+-> forced-answer guardrail. Run 5: 58/58. Run 6: 110/111, repeats in 14/17 turns -> two-round limit.
+Run 7: 110/111, prompt caching halves cost ($0.55). Run 8: 109/111, both failures were check
+artifacts -> checks fixed (any matching call; ranking vs expected arguments). **Run 9 (24 cases, new
+scoring) is pending on the laptop.**
 
-## 7. Next steps (in order; stop for review after each)
-1. ~~Analyse eval run 3~~ (done; fixes A-E deferred to `docs/IMPROVEMENTS.md` section 8 by the user's choice).
-2. **Slice 3 (built, eval run 4 pending on the laptop): `compare_hubs` and `explain_hub` tools** for "Compare Miami and Houston (hurricane + flood)" and "Why is Dallas high?". `explain_hub` can use `/hubs/{id}` data: per-hazard days, drivers, counted FEMA disasters. Add eval cases.
-3. **Done (time-dimension slice, eval run 6 pending): `weather_stat`, `hub_breakdown`, `period` on rank/compare** (`docs/QUESTION_CATALOG.md`). Original note: **Slice 4: `weather_stat` tool** for "% of days in Denver last year with snowfall" ("last year" = 2025, inside the stored window; state the date range and the >= threshold used). Add eval cases.
-4. **README rewrite**: run instructions (Windows + macOS/Linux), assumptions and limitations, repository structure, data storage choice (the required design-doc items).
-5. **Deploy: ready, not yet deployed.** `Dockerfile` + `render.yaml` (Blueprint), tested locally in Docker (health, password, rankings, alerts, non-root). The user creates the service on Render (README section 1a) with `ANTHROPIC_API_KEY` and `APP_PASSWORD`.
-6. Bonus: alerts **done** (monthly outlook + score change). Remaining: voice (Web Speech API in the page); live NWS alerts.
-7. **Session transcripts (mandatory deliverable)**: export the transcript of every AI session and commit it under `docs/ai-session/`.
-
-If short on time, cut in this order: voice, alerts, deploy (run locally instead).
+## 8. Next steps (in order; stop for review after each)
+1. **Session transcripts (mandatory deliverable)**: export the transcript of every AI session and
+   commit it under `docs/ai-session/` with a short index (plan, sessions, outcomes).
+2. **Eval run 9** on the laptop (`uv run python -m evals.run`), analyse it, record it in `docs/EVALS.md`.
+3. Optional: voice input (Web Speech API in the page); live NWS alerts; uncertainty ranges per hub
+   (`docs/IMPROVEMENTS.md`).

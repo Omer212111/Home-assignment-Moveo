@@ -5,10 +5,11 @@ investment will ask many variations of them. This catalog groups the likely ques
 *dimension* they need (which hubs, which hazard, which time period, what statistic), marks what the
 agent can answer today, and proposes the smallest set of tools that covers the rest.
 
-Status (updated after the time-dimension slice): ✅ answered · 🟡 partly · ❌ not yet.
-The ❌ rows marked *(built)* below are now implemented: `period` on `rank_hubs` / `compare_hubs`,
-`order` on `rank_hubs`, and the new `hub_breakdown` and `weather_stat` tools (`DESIGN_DECISIONS.md` section 14).
-Still open: region totals, threshold counts, worst single event, a method tool.
+Status (updated 2026-11-16): ✅ answered · 🟡 partly · ❌ not yet. Rows marked *(built)* were added
+by the time-dimension slice: `period` on `rank_hubs` / `compare_hubs`, `order` on `rank_hubs`, and the
+`hub_breakdown` and `weather_stat` tools (`DESIGN_DECISIONS.md` section 14). Every ✅ question type has
+an eval case (`docs/EVALS.md`). Still open: region totals, threshold counts, worst single event, a
+method tool. Out-of-scope questions (section 6) are also covered by eval cases.
 
 ## 1. Rankings (which hubs?)
 | Example | Status | Tool |
@@ -52,8 +53,8 @@ Still open: region totals, threshold counts, worst single event, a method tool.
 | How confident are you? What could make this wrong? | ✅ | `confidence`, `assumptions`, `uncertainty_notes` in every answer |
 
 ## 6. Out of scope (must say so, not guess)
-Weather forecasts, cities that are not hubs, cost in dollars (not modelled yet), live alerts
-(planned bonus), hub-specific vulnerability (building standard, backup power).
+Weather forecasts, cities that are not hubs, cost in dollars (not modelled yet), live storm alerts
+(not built; the historical monthly outlook is), hub-specific vulnerability (building standard, backup power).
 
 ---
 
@@ -77,7 +78,7 @@ Weather-channel disruption days, average per year by month (Jan..Dec), 2021-2025
 
 ---
 
-## Proposed design: one time dimension, used by every tool
+## Design: one time dimension, used by every tool (built as proposed)
 
 **1. Engine:** keep each hub's **daily disruption series** (date, hazard, days) that the engine
 already computes and then discards. Declarations are placed on their incident date. Every
