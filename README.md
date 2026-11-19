@@ -303,7 +303,7 @@ eval cost.
 | `POST /chat` | yes | `{"message": "...", "session_id": null}` -> answer, ranking, tool calls, trajectory, tokens |
 
 
-```
+
 
 ---
 
