@@ -302,9 +302,6 @@ eval cost.
 | `POST /alerts/check` | no | Webhook-triggered outlook check (idempotent); header `X-Alerts-Token` if `ALERTS_TOKEN` is set |
 | `POST /chat` | yes | `{"message": "...", "session_id": null}` -> answer, ranking, tool calls, trajectory, tokens |
 
-
-```
-
 ---
 
 ### Alerts (bonus)
